@@ -47,8 +47,11 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 3001; // Frontend is usually 3000 or 5173
+console.log('🔥 The Forge is starting up...');
 
-httpServer.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+const PORT = process.env.PORT || 3001;
+
+httpServer.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`✅ Server is running on port ${PORT}`);
+    console.log(`🔗 API URL: http://0.0.0.0:${PORT}`);
 });

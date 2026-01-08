@@ -13,11 +13,15 @@ We recommend **Render** or **Railway** for hosting the Node.js/Express backend.
 3. **Build Command**: `npm install && npx prisma generate && npm run build`
 4. **Start Command**: `npx prisma migrate deploy && npm start`
 
-### Environment Variables
-| Key | Value |
-| :--- | :--- |
-| `DATABASE_URL` | Your PostgreSQL/MySQL connection string. |
-| `PORT` | 3001 (or as provided by the host). |
+### Environment Variables (ON RENDER)
+1. Go to the **Environment** tab in your Render service.
+2. Click **Add Environment Variable**.
+3. **Key**: `DATABASE_URL`
+4. **Value**: (Use the **Transaction Mode** URI from Supabase)
+   - *Example*: `postgresql://postgres:Gene4piano6!@aws-0-us-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true`
+   - **CRITICAL**: The host name **MUST** have `.pooler.` in it. If your URL has `db.mlmbiz...`, you are using the wrong host!
+   - **PORT**: Port **6543** is required for Transaction mode.
+5. **SAVE**: Scroll down and click **Save Changes**.
 
 ---
 
