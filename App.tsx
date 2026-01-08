@@ -37,14 +37,14 @@ const KragCommandments: React.FC<{ onClose?: () => void; noMargin?: boolean }> =
         </button>
       )}
       <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest mb-8 border-b-2 border-[#5c5346] pb-2 text-center">Krag’s Commandments</h2>
-      <ul className="space-y-5 text-lg md:text-xl italic font-medium leading-relaxed opacity-90 max-w-xl mx-auto">
-        <li className="flex gap-4"><span>📜</span> "Roll for initiative! Complete a workout to strike the foe."</li>
-        <li className="flex gap-4"><span>📜</span> "Finish all workouts for the week to grow stronger (+1 Strength)."</li>
-        <li className="flex gap-4"><span>📜</span> "When an enemy falls, the one with the greatest total rolls claims the weapon (more sweat, more rolls — that’s just physics)."</li>
-        <li className="flex gap-4"><span>📜</span> "Better weapons hit harder. Keep ’em."</li>
-        <li className="flex gap-4"><span>📜</span> "A 20 earns thunderous praise. A 1 earns a lesson."</li>
-        <li className="flex gap-4"><span>📜</span> "Each time you train, Krag Hornblower sounds the Gjallar Horn in your honor."</li>
-        <li className="flex gap-4 font-black uppercase tracking-tighter not-italic mt-8 text-[#3a352f] justify-center text-xl md:text-2xl border-t border-[#5c5346]/20 pt-4 text-center">"Now back to work."</li>
+      <ul className="space-y-4 text-sm md:text-base italic font-medium leading-relaxed opacity-90 max-w-xl mx-auto">
+        <li className="flex gap-4"><span>⚔️</span> "Roll the d20! Your weapon’s modifier (+0, +1, etc.) adds directly to your raw effort."</li>
+        <li className="flex gap-4"><span>📜</span> "The Effective Roll determines Hit Quality: Glancing (2-5), Solid (6-10), Strong (11-15), or Critical (16-19)."</li>
+        <li className="flex gap-4"><span>🐉</span> "An Effective 20 is an AUTO-KILL. The beast falls instantly. Victory is yours."</li>
+        <li className="flex gap-4"><span>⚡</span> "Damage scales with Level. Higher power allows you to roll more dice (ceil of level / 2) on every strike."</li>
+        <li className="flex gap-4"><span>💎</span> "When a foe falls, the one with the highest total D20 rolls (The Fair Sweat Rule) claims the loot."</li>
+        <li className="flex gap-4"><span>⚠️</span> "A Natural 1 on the d20 is a Fumble. You deal no damage and are cursed (no loot) for that battle."</li>
+        <li className="flex gap-4 font-black uppercase tracking-tighter not-italic mt-6 text-[#3a352f] justify-center text-lg md:text-xl border-t border-[#5c5346]/10 pt-4 text-center">"Now back to work."</li>
       </ul>
     </div>
   );
@@ -259,14 +259,17 @@ export default function App() {
           setActiveRoll({
             pId: participantId,
             roll: res.roll,
-            isCrit, isFumble, hit,
+            effectiveRoll: res.effectiveRoll,
+            quality: res.quality,
+            isCrit: res.quality === 'CRITICAL' || res.quality === 'AUTO-KILL',
+            isFumble: res.roll === 1,
+            hit: res.quality !== 'MISS',
             damage: res.damage,
             resolving: false,
             phase: 2,
             message: msg,
             strength: participant?.level || 0,
-            ac: campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex)?.ac || 10,
-            killed: res.killed // Backend should return if this blow was fatal
+            killed: res.killed
           });
 
           // Phase 3: Auto-fade after 5 seconds
@@ -600,26 +603,35 @@ export default function App() {
             ) : (
               <div className="animate-in zoom-in fade-in duration-500">
                 <div className="mb-6 relative flex flex-col items-center">
-                  <div className={`text-9xl pencil-font leading-none mb-4 ${activeRoll.roll === 20 ? 'text-[#8b0000] scale-125 font-black' :
-                    activeRoll.roll === 1 ? 'text-gray-400 line-through opacity-50' :
-                      'text-[#3a352f]'
-                    }`}>
-                    {activeRoll.roll}
+                  <div className="flex items-center gap-6 mb-8 mt-2">
+                    <div className="text-center">
+                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">D20</div>
+                      <div className="text-4xl font-black">{activeRoll.roll}</div>
+                    </div>
+                    <div className="text-2xl font-light opacity-30 mt-4">+</div>
+                    <div className="text-center">
+                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Weapon</div>
+                      <div className="text-4xl font-black">{activeRoll.effectiveRoll - activeRoll.roll >= 0 ? `+${activeRoll.effectiveRoll - activeRoll.roll}` : activeRoll.effectiveRoll - activeRoll.roll}</div>
+                    </div>
+                    <div className="text-2xl font-light opacity-30 mt-4">=</div>
+                    <div className="text-center">
+                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Effective</div>
+                      <div className={`text-5xl font-black ${activeRoll.isCrit ? 'text-[#8b0000] animate-pulse' : ''}`}>{activeRoll.effectiveRoll}</div>
+                    </div>
                   </div>
 
-                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-8 border-t border-[#5c5346]/10 pt-2 w-full max-w-[180px]">
-                    Basis {activeRoll.roll} + Strength {activeRoll.strength} vs Defense {activeRoll.ac}
-                  </div>
-
-                  <div className="text-4xl font-black uppercase tracking-tighter mb-2">
-                    {activeRoll.isCrit ? "DEVASTATING!" :
-                      activeRoll.isFumble ? "MISFORTUNE!" :
-                        activeRoll.hit ? "STRIKE!" : "DEFLECTED!"}
+                  <div className={`text-4xl font-black uppercase tracking-tighter mb-4 ${activeRoll.hit ? 'text-black' : 'text-[#8b0000] opacity-50'}`}>
+                    {activeRoll.quality}
                   </div>
 
                   {activeRoll.hit && (
-                    <div className="text-5xl font-black pencil-font mb-6 text-[#3a352f]">
-                      {activeRoll.damage} DMG
+                    <div className="flex flex-col items-center">
+                      <div className="text-[8px] font-bold uppercase tracking-widest opacity-40 mb-1">
+                        Power Level {activeRoll.strength} • {Math.ceil(activeRoll.strength / 2)} Dice
+                      </div>
+                      <div className="text-6xl font-black pencil-font mb-2 text-[#3a352f]">
+                        {activeRoll.damage} DMG
+                      </div>
                     </div>
                   )}
                 </div>

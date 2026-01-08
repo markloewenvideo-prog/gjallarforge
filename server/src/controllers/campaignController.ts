@@ -109,14 +109,19 @@ export const createCampaign = async (req: Request, res: Response) => {
 
                         const budgetedWorkoutsForThisEnemy = totalCampaignWorkouts * budgetPercentage;
 
-                        // Target AC: ExpectedLevel + 8 (Hit chance: ~65% with +Strength bonus)
-                        // Add variance of -1, 0, or +1
-                        const variance = Math.floor(Math.random() * 3) - 1;
-                        const ac = expectedLevel + 8 + variance;
+                        // HP Calibration for "The Sword & The Die"
+                        // Avg Damage per hit: (AvgDieSides / 2 + 0.5) * numDice
+                        // NumDice = ceil(expectedLevel / 2)
+                        // Baseline die (Solid Hit) = d6 (3.5 avg)
+                        const expectedDice = Math.ceil(expectedLevel / 2);
+                        const avgDamagePerHit = 3.5 * expectedDice;
 
-                        // HP = Budgeted Workouts * (Avg Weapon Damage + Expected Level Strength Bonus) * Scale
-                        // 0.70 factor offsets critical hits and better-than-average rolls
-                        const hp = Math.ceil(budgetedWorkoutsForThisEnemy * (avgDmg + expectedLevel) * 0.70);
+                        // We want the Dragon to take ~40% of the campaign's workout budget
+                        // Other enemies split the remaining 60%
+                        // HP = workouts * avgDamage * toughness_multiplier
+                        // Dragon has higher multiplier for epic feel
+                        const toughness = isBoss ? 1.5 : 1.0;
+                        const hp = Math.ceil(budgetedWorkoutsForThisEnemy * avgDamagePerHit * toughness);
 
                         const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
                         const finalDescription = `${data.description} Beware its ${spell}!`;
@@ -126,7 +131,7 @@ export const createCampaign = async (req: Request, res: Response) => {
                             description: finalDescription,
                             hp: Math.max(10, hp),
                             maxHp: Math.max(10, hp),
-                            ac: ac,
+                            ac: 10,
                             weaponDropTier: dropTier,
                             order: i,
                             isDead: false

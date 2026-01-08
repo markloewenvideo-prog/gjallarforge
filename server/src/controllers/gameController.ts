@@ -3,20 +3,7 @@ import { prisma } from '../db';
 import { getIO } from '../socket';
 import { WEAPONS } from '../constants';
 
-// Helper to calculate damage
-const calculateDamage = (weaponTier: number, strength: number) => {
-    const w = WEAPONS[weaponTier as keyof typeof WEAPONS] || WEAPONS[0];
-    const sides = w.sides;
-    const numDice = w.numDice;
-
-    let roll = 0;
-    for (let i = 0; i < numDice; i++) {
-        roll += Math.floor(Math.random() * sides) + 1;
-    }
-
-    // Add Strength (Level) to damage
-    return roll + strength;
-};
+// Combat helper logic moved into performAction for more granular log data
 
 export const performAction = async (req: Request, res: Response) => {
     try {
@@ -53,42 +40,72 @@ export const performAction = async (req: Request, res: Response) => {
             return;
         }
 
-        // --- NEW DAMAGE LOGIC ---
-        // 1. D20 Roll
-        const d20 = Math.floor(Math.random() * 20) + 1;
-        const isFumble = d20 === 1;
-        const isCrit = d20 === 20;
+        // --- THE SWORD & THE DIE ---
 
-        // 2. Weapon Roll
+        // 1. Roll d20
+        const rawD20 = Math.floor(Math.random() * 20) + 1;
+
+        // 2. Weapon Modifier
         const weapon = WEAPONS[participant.weaponTier as keyof typeof WEAPONS] || WEAPONS[0];
-        let weaponRoll = 0;
-        for (let i = 0; i < weapon.numDice; i++) {
-            weaponRoll += Math.floor(Math.random() * weapon.sides) + 1;
+        const weaponBonus = parseInt(weapon.dice.replace('+', '')) || 0;
+
+        // 3. Effective Roll (Clamped 1-20)
+        const effectiveRoll = Math.min(20, Math.max(1, rawD20 + weaponBonus));
+
+        let damage = 0;
+        let quality = "";
+        let dieSides = 0;
+        let killed = false;
+        let isAutoKill = false;
+
+        // 4. Hit Quality Table & Damage calculation
+        const numDice = Math.ceil(participant.level / 2);
+
+        if (effectiveRoll === 20) {
+            quality = "AUTO-KILL";
+            damage = currentEnemy.hp; // Kill the beast
+            killed = true;
+            isAutoKill = true;
+        } else if (effectiveRoll >= 16) {
+            quality = "CRITICAL";
+            dieSides = 10;
+        } else if (effectiveRoll >= 11) {
+            quality = "STRONG";
+            dieSides = 8;
+        } else if (effectiveRoll >= 6) {
+            quality = "SOLID";
+            dieSides = 6;
+        } else if (effectiveRoll >= 2) {
+            quality = "GLANCING";
+            dieSides = 4;
+        } else {
+            quality = "MISS";
+            damage = 0;
         }
 
-        // 3. Strength (Level)
-        const strength = participant.level;
+        // Roll damage dice (Background)
+        if (dieSides > 0 && !isAutoKill) {
+            for (let i = 0; i < numDice; i++) {
+                damage += Math.floor(Math.random() * dieSides) + 1;
+            }
+        }
 
-        // 4. Total Damage = D20 + Weapon + Strength
-        // Critical doubles the total
-        let damage = d20 + weaponRoll + strength;
-        if (isCrit) damage *= 2;
-
-        // --- UPDATE WORLD ---
-        // Pips: Nat 20 = 2 pips, else 1 pip
-        const pipsToAdd = isCrit ? 2 : 1;
+        // --- UPDATE STATS ---
+        const isNat20 = rawD20 === 20;
+        const pipsToAdd = isNat20 ? 2 : 1;
+        const isNat1 = rawD20 === 1;
 
         await prisma.participant.update({
             where: { id: participant.id },
             data: {
                 totalWorkouts: { increment: pipsToAdd },
                 workoutsThisWeek: { increment: pipsToAdd },
-                isLootDisqualified: isFumble ? true : undefined,
-                bountyScore: { increment: d20 }, // Loot still follows Raw D20 rolls
-                nat20Count: isCrit ? { increment: 1 } : undefined,
-                isInspired: isCrit ? true : undefined,
+                isLootDisqualified: isNat1 ? true : undefined,
+                bountyScore: { increment: rawD20 }, // Loot still follows Raw D20
+                nat20Count: isNat20 ? { increment: 1 } : undefined,
+                isInspired: isNat20 ? true : undefined,
                 highestSingleRoll: {
-                    set: Math.max((participant as any).highestSingleRoll, d20)
+                    set: Math.max((participant as any).highestSingleRoll, rawD20)
                 },
                 bountyScoreUpdatedAt: new Date()
             } as any
@@ -97,23 +114,16 @@ export const performAction = async (req: Request, res: Response) => {
         // Update Enemy
         await prisma.enemy.update({
             where: { id: currentEnemy.id },
-            data: {
-                hp: { decrement: damage }
-            }
+            data: { hp: { decrement: damage } }
         });
 
         const updatedEnemy = await prisma.enemy.findUnique({ where: { id: currentEnemy.id } });
-        let killed = false;
-
         if (updatedEnemy && updatedEnemy.hp <= 0) {
             killed = true;
 
-            // Fair Sweat Loot Determination
+            // Loot Determination
             const eligible = await prisma.participant.findMany({
-                where: {
-                    campaignId,
-                    isLootDisqualified: false
-                },
+                where: { campaignId, isLootDisqualified: false },
                 orderBy: [
                     { bountyScore: 'desc' },
                     { nat20Count: 'desc' },
@@ -155,8 +165,8 @@ export const performAction = async (req: Request, res: Response) => {
             });
         }
 
-        // Log
-        const logEntry = await prisma.logEntry.create({
+        // Log the strike
+        await prisma.logEntry.create({
             data: {
                 campaignId,
                 type: 'attack',
@@ -164,12 +174,14 @@ export const performAction = async (req: Request, res: Response) => {
                     participantId,
                     participantName: participant.name,
                     enemyName: currentEnemy.name,
-                    roll: d20,
+                    roll: rawD20,
+                    modifier: weaponBonus,
+                    effectiveRoll,
+                    quality,
                     damage,
-                    isCrit,
-                    hit: true, // Always hit now
-                    weaponRoll,
-                    strength
+                    numDice,
+                    dieSides,
+                    hit: quality !== "MISS"
                 })
             }
         });
@@ -186,7 +198,7 @@ export const performAction = async (req: Request, res: Response) => {
         });
 
         io.to(campaignId).emit('gamestate_update', updatedCampaign);
-        res.json({ success: true, roll: d20, damage, killed });
+        res.json({ success: true, roll: rawD20, effectiveRoll, damage, killed, quality });
 
     } catch (error) {
         console.error('Action error:', error);

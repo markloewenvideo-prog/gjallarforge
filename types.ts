@@ -1,5 +1,5 @@
 
-export type WeaponTier = 0 | 1 | 2 | 3 | 4;
+export type WeaponTier = 0 | 1 | 2 | 3 | 4 | 5;
 
 export interface Weapon {
   tier: WeaponTier;
