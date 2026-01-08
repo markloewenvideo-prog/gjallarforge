@@ -17,6 +17,7 @@ const calculateExpectedWeeklyDamage = (numParticipants: number, workoutsPerWeek:
 };
 
 export const createCampaign = async (req: Request, res: Response) => {
+    console.log("[DEBUG] Request-time DATABASE_URL:", process.env.DATABASE_URL);
     try {
         const { name: rawName, config: rawConfig, participantsNames, initialEnemy } = req.body;
 

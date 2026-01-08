@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
+import dotenv from 'dotenv';
+dotenv.config();
 
-// Prisma 7: Datasource is configured in prisma.config.ts, not here
-// Export a new instance directly to avoid global pollution issues
+console.log('[DEBUG] DB Code Loading. URL is present:', !!process.env.DATABASE_URL);
 export const prisma = new PrismaClient();
