@@ -16,12 +16,16 @@ We recommend **Render** or **Railway** for hosting the Node.js/Express backend.
 ### Environment Variables (ON RENDER)
 1. Go to the **Environment** tab in your Render service.
 2. Click **Add Environment Variable**.
-3. **Key**: `DATABASE_URL`
-4. **Value**: (Use the **Transaction Mode** URI from Supabase)
-   - *Example*: `postgresql://postgres:Gene4piano6!@aws-0-us-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true`
-   - **CRITICAL**: The host name **MUST** have `.pooler.` in it. If your URL has `db.mlmbiz...`, you are using the wrong host!
-   - **PORT**: Port **6543** is required for Transaction mode.
-5. **SAVE**: Scroll down and click **Save Changes**.
+
+#### ⚔️ The Double Ritual (Fixes P1001)
+You must set **TWO** different URLs from Supabase:
+
+| Key | Value (From Supabase Settings > Database) | Port | Mode |
+| :--- | :--- | :--- | :--- |
+| **`DATABASE_URL`** | The **Transaction** Mode URI (contains `.pooler.`) | **6543** | Transaction |
+| **`DIRECT_URL`** | The **Session** Mode URI (contains `.pooler.`) | **5432** | Session |
+
+3. **SAVE**: Scroll down and click **Save Changes**.
 
 ---
 
