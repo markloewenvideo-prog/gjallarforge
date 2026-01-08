@@ -1014,6 +1014,74 @@ export default function App() {
                   );
                 }
 
+                // Milestone: STATUS_CHANGES
+                const isStatus = log.type === 'system' && (
+                  content.message?.includes('EVENT_INSPIRED') ||
+                  content.message?.includes('EVENT_CURSED') ||
+                  content.message?.includes('EVENT_SAVED')
+                );
+                if (isStatus) {
+                  const [tag, text] = content.message.split(':');
+                  const bgColor = tag === 'EVENT_INSPIRED' ? 'bg-yellow-500/5' : tag === 'EVENT_CURSED' ? 'bg-black/5' : 'bg-green-500/5';
+                  const textColor = tag === 'EVENT_INSPIRED' ? 'text-yellow-700' : tag === 'EVENT_CURSED' ? 'text-gray-700' : 'text-green-700';
+                  const icon = tag === 'EVENT_INSPIRED' ? '✨' : tag === 'EVENT_CURSED' ? '💀' : '🛡️';
+                  return (
+                    <div key={log.id} className={`py-3 px-6 border-l-4 ${tag === 'EVENT_INSPIRED' ? 'border-yellow-500' : tag === 'EVENT_CURSED' ? 'border-black' : 'border-green-500'} ${bgColor} my-2 mx-4`}>
+                      <div className={`text-[10px] font-black uppercase tracking-widest ${textColor} flex items-center gap-2`}>
+                        <span>{icon}</span> {text}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Milestone: SHADOW_MOVEMENTS
+                if (log.type === 'system' && (content.message?.includes('SHADOW_GROWTH') || content.message?.includes('SHADOW_RECEDES'))) {
+                  const isGrowth = content.message.includes('SHADOW_GROWTH');
+                  return (
+                    <div key={log.id} className={`py-4 px-6 border-y border-dashed ${isGrowth ? 'border-[#8b0000]/20 bg-[#8b0000]/5' : 'border-green-700/20 bg-green-700/5'} my-4 text-center`}>
+                      <div className={`text-[9px] font-bold uppercase tracking-[0.3em] ${isGrowth ? 'text-[#8b0000]' : 'text-green-800'} mb-1`}>
+                        {isGrowth ? 'The Shadow Grows' : 'The Shadow Recedes'}
+                      </div>
+                      <div className="pencil-font text-sm italic opacity-60">"{content.message.split(':')[1].trim()}"</div>
+                    </div>
+                  );
+                }
+
+                // Milestone: LEVEL_UP
+                if (log.type === 'system' && content.message?.includes('EVENT_LEVELUP')) {
+                  const [tag, text] = content.message.split(':');
+                  return (
+                    <div key={log.id} className="py-2 px-6 my-1 mx-4">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-[#8b0000] flex items-center gap-2">
+                        <span className="animate-bounce">⚔️</span> {text}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Milestone: ENEMY_NAMED
+                if (log.type === 'system' && content.message?.includes('EVENT_ENEMYNAMED')) {
+                  return (
+                    <div key={log.id} className="py-6 px-10 border-2 border-double border-[#5c5346]/20 mx-8 my-6 bg-white/20 text-center relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-full h-1 bg-[#5c5346]/10" />
+                      <div className="text-[8px] font-bold uppercase tracking-[0.4em] opacity-30 mb-2">A New Threat Emerges</div>
+                      <div className="text-xl font-black uppercase tracking-tight text-[#3a352f] mb-2">{content.enemyName}</div>
+                      <div className="text-[10px] italic opacity-50 px-4">"{content.description}"</div>
+                    </div>
+                  );
+                }
+
+                // Cycle Start
+                if (log.type === 'system' && content.message?.includes('begun. The Forge burns brighter.')) {
+                  return (
+                    <div key={log.id} className="py-8 px-4 text-center">
+                      <div className="h-px bg-[#5c5346]/20 w-32 mx-auto mb-4" />
+                      <div className="text-[10px] font-bold uppercase tracking-[0.8em] opacity-40">{content.message}</div>
+                      <div className="h-px bg-[#5c5346]/20 w-32 mx-auto mt-4" />
+                    </div>
+                  );
+                }
+
                 // Standard Attack
                 if (log.type === 'attack') {
                   const isCrit = content.roll === 20;

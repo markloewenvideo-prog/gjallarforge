@@ -154,10 +154,20 @@ export const createCampaign = async (req: Request, res: Response) => {
                     })
                 },
                 logs: {
-                    create: {
-                        type: 'system',
-                        content: JSON.stringify({ message: `The Forge is lit for ${name}. The journey begins.` })
-                    }
+                    create: [
+                        {
+                            type: 'system',
+                            content: JSON.stringify({ message: `The Forge is lit for ${name}. The journey begins.` })
+                        },
+                        {
+                            type: 'system',
+                            content: JSON.stringify({
+                                message: `EVENT_ENEMYNAMED:${generatedMonsterData[0].name}`,
+                                enemyName: generatedMonsterData[0].name,
+                                description: generatedMonsterData[0].description
+                            })
+                        }
+                    ]
                 }
             },
             include: {
@@ -368,7 +378,10 @@ export const forgeAhead = async (req: Request, res: Response) => {
             });
 
         // 2. Process participants
-        const updates = campaign.participants.map((participant: any) => {
+        const participantUpdates: any[] = [];
+        const statusLogs: any[] = [];
+
+        campaign.participants.forEach((participant: any) => {
             const p = participant;
             const workouts = p.workoutsThisWeek;
             const hitGoal = workouts >= oathGoal;
@@ -407,7 +420,36 @@ export const forgeAhead = async (req: Request, res: Response) => {
                 summary.totalExtras += (workouts - oathGoal);
             }
 
-            return prisma.participant.update({
+            if (statusChange !== 'none' && statusChange !== 'sustained') {
+                statusLogs.push(prisma.logEntry.create({
+                    data: {
+                        campaignId: id,
+                        type: 'system',
+                        content: JSON.stringify({
+                            message: statusChange === 'saved' ? `EVENT_SAVED:${p.name} has been cleansed of their curse.` :
+                                statusChange === 'inspired' ? `EVENT_INSPIRED:${p.name} burns with divine inspiration!` :
+                                    statusChange === 'cursed' ? `EVENT_CURSED:${p.name} has stumbled. A shadow clings to them.` : '',
+                            participantName: p.name
+                        })
+                    }
+                }));
+            }
+
+            if (hitGoal) {
+                statusLogs.push(prisma.logEntry.create({
+                    data: {
+                        campaignId: id,
+                        type: 'system',
+                        content: JSON.stringify({
+                            message: `EVENT_LEVELUP:${p.name} has reached Level ${p.level + 1}! Their strength grows.`,
+                            participantName: p.name,
+                            newLevel: p.level + 1
+                        })
+                    }
+                }));
+            }
+
+            participantUpdates.push(prisma.participant.update({
                 where: { id: p.id },
                 data: {
                     level: hitGoal ? p.level + 1 : p.level,
@@ -416,7 +458,7 @@ export const forgeAhead = async (req: Request, res: Response) => {
                     isInspired: nextInspired,
                     isCursed: nextCursed,
                 } as any
-            });
+            }));
         });
 
         // 3. Shadow Growth & Shrink Logic
@@ -448,7 +490,7 @@ export const forgeAhead = async (req: Request, res: Response) => {
                         hp: newHP,
                         maxHp: newMaxHP,
                         adjustmentHp: { increment: hpAdjustment }
-                    }
+                    } as any
                 });
 
                 await prisma.logEntry.create({
@@ -457,8 +499,8 @@ export const forgeAhead = async (req: Request, res: Response) => {
                         type: 'system',
                         content: JSON.stringify({
                             message: hpAdjustment > 0
-                                ? `SHADOW_GROWTH: The final foe devours your weakness. The boss gains ${hpAdjustment} HP.`
-                                : `SHADOW_SHRINK: The fellowship's zeal burns the shadow. The boss loses ${Math.abs(hpAdjustment)} HP.`
+                                ? `SHADOW_GROWTH: The Shadow Grows. The final foe devours your weakness and gains ${hpAdjustment} HP.`
+                                : `SHADOW_RECEDES: The Shadow Recedes. The fellowship's zeal burns the darkness, stripping ${Math.abs(hpAdjustment)} HP.`
                         })
                     }
                 });
@@ -479,7 +521,7 @@ export const forgeAhead = async (req: Request, res: Response) => {
             }
         });
 
-        await prisma.$transaction([...updates, campaignUpdate]);
+        await prisma.$transaction([...participantUpdates, ...statusLogs, campaignUpdate]);
 
         const updatedCampaign = await prisma.campaign.findUnique({
             where: { id },
@@ -553,6 +595,18 @@ export const renameEnemy = async (req: Request, res: Response) => {
             data: {
                 name: finalName,
                 description: (description || "").trim()
+            }
+        });
+
+        await prisma.logEntry.create({
+            data: {
+                campaignId: id,
+                type: 'system',
+                content: JSON.stringify({
+                    message: `EVENT_ENEMYNAMED:${updated.name}`,
+                    enemyName: updated.name,
+                    description: updated.description
+                })
             }
         });
 
