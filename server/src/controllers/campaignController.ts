@@ -86,12 +86,32 @@ export const createCampaign = async (req: Request, res: Response) => {
         console.log("[DEBUG] Step 2: Preparing participants...");
         const participantsData = [];
         try {
-            for (const pName of participantsNames) {
-                const cleanName = pName.trim();
-                if (!cleanName) continue;
+            console.log("[DEBUG] participantsNames type:", typeof participantsNames, "isArray:", Array.isArray(participantsNames));
+            console.log("[DEBUG] participantsNames content:", JSON.stringify(participantsNames));
 
-                let user = await prisma.user.findUnique({ where: { username: cleanName } });
+            if (!prisma.user) {
+                console.error("[DEBUG] CRITICAL: prisma.user is missing!", Object.keys(prisma));
+                throw new Error("The Fellowship Hall (User table) is not correctly initialized in the Forge. Contact Krag.");
+            }
+
+            for (const pName of participantsNames) {
+                console.log("[DEBUG] Processing pName:", typeof pName, pName);
+                if (pName === null || pName === undefined) continue;
+
+                const cleanName = String(pName).trim();
+                if (!cleanName || cleanName === "null" || cleanName === "undefined") continue;
+
+                console.log("[DEBUG] Searching for user:", cleanName);
+                let user = await (prisma.user as any).findFirst({
+                    where: {
+                        username: {
+                            equals: cleanName
+                        }
+                    }
+                });
+
                 if (!user) {
+                    console.log("[DEBUG] Creating new user for:", cleanName);
                     const passwordHash = await bcrypt.hash('password123', 10);
                     user = await prisma.user.create({
                         data: { username: cleanName, passwordHash }
