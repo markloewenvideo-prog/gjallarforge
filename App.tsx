@@ -272,6 +272,9 @@ export default function App() {
           const isFumble = res.roll === 1;
           const hit = res.damage > 0;
           const participant = campaign.participants.find((p: any) => p.id === participantId);
+          const currentEnemy = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
+          const winnerParticipant = campaign.participants.find((p: any) => p.id === participantId);
+          const winnerName = winnerParticipant?.name || "The Fellowship";
 
           let msg = "";
           if (isCrit) msg = FLAVOR_TEXT.crit;
@@ -291,24 +294,14 @@ export default function App() {
             resolving: false,
             phase: 2,
             message: msg,
-            killed: res.killed
-          });
-
-          // Manual closure requested by user - remove auto-fade
-          if (res.killed) {
-            const currentEnemy = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
-            const winnerParticipant = campaign.participants.find((p: any) => p.id === participantId);
-            const winnerName = winnerParticipant?.name || "The Fellowship";
-
-            setVictoryData({
+            killed: res.killed,
+            victoryPayload: res.killed ? {
               winner: winnerName,
               winnerLevel: winnerParticipant?.level || 1,
-              bounty: WEAPONS[res.tier as WeaponTier]?.name || "a bounty",
-              weaponTier: res.tier,
-              stats: WEAPONS[res.tier as WeaponTier]?.dice || "??",
-              enemyName: currentEnemy?.name || "The Foe"
-            });
-          }
+              enemyName: currentEnemy?.name || "The Foe",
+              weaponTier: res.tier
+            } : null
+          });
         } else {
           setActiveRoll(null);
         }
@@ -646,21 +639,20 @@ export default function App() {
 
       {activeRoll && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md overflow-y-auto">
-          <div className="flex flex-col items-center max-w-sm w-full gap-4 my-auto">
-            <div className="rpg-card p-6 md:p-12 text-center w-full ink-border shadow-2xl relative">
+          <div className="rpg-card p-6 md:p-12 text-center max-w-sm w-full ink-border shadow-2xl relative my-auto">
+            <div className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-40 mb-8 mt-2">Hand of Fate</div>
 
-              <div className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-40 mb-8 mt-2">Hand of Fate</div>
-
-              {activeRoll.phase === 1 ? (
-                <div className="animate-in fade-in duration-500">
-                  <div className="text-9xl mb-12 animate-spin-slow opacity-40 scale-90 grayscale">
-                    🎲
-                  </div>
-                  <div className="text-xs font-bold uppercase tracking-[0.2em] opacity-60 animate-pulse mb-4">
-                    Calculating Destiny...
-                  </div>
+            {activeRoll.phase === 1 ? (
+              <div className="animate-in fade-in duration-500">
+                <div className="text-9xl mb-12 animate-spin-slow opacity-40 scale-90 grayscale">
+                  🎲
                 </div>
-              ) : (
+                <div className="text-xs font-bold uppercase tracking-[0.2em] opacity-60 animate-pulse mb-4">
+                  Calculating Destiny...
+                </div>
+              </div>
+            ) : (
+              <>
                 <div className="animate-in zoom-in fade-in duration-500">
                   <div className="mb-6 relative flex flex-col items-center">
                     <div className="flex items-center gap-6 mb-8 mt-2">
@@ -699,25 +691,28 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-              )}
-            </div>
 
-            {activeRoll.phase === 2 && (
-              <button
-                onClick={() => setActiveRoll(null)}
-                className="w-full py-5 button-ink text-lg font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-2xl ring-4 ring-black/20"
-              >
-                Onward
-              </button>
+                <button
+                  onClick={() => {
+                    if (activeRoll.victoryPayload) {
+                      setVictoryData(activeRoll.victoryPayload);
+                    }
+                    setActiveRoll(null);
+                  }}
+                  className="w-full py-4 button-ink font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-lg"
+                >
+                  Onward
+                </button>
+              </>
             )}
           </div>
         </div>
       )}
 
-      {victoryData && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl animate-in zoom-in-95 duration-700 overflow-y-auto">
-          <div className="flex flex-col items-center max-w-sm w-full gap-4 my-auto">
-            <div className="rpg-card w-full p-0 shadow-[0_0_100px_rgba(217,197,163,0.1)] border-4 border-[#5c5346] relative">
+      {
+        victoryData && (
+          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl animate-in zoom-in-95 duration-700 overflow-y-auto">
+            <div className="rpg-card max-w-sm w-full p-0 shadow-[0_0_100px_rgba(217,197,163,0.1)] border-4 border-[#5c5346] relative my-auto">
 
               {/* The Placard Header */}
               <div className="bg-[#5c5346] text-[#fdf6e3] py-8 text-center relative">
@@ -799,7 +794,7 @@ export default function App() {
                     onClick={handleForgeOnwards}
                     className="w-full py-5 button-ink text-lg font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
                   >
-                    Forge Onwards
+                    Onward
                   </button>
                   <div className="mt-4 text-[9px] font-bold uppercase tracking-widest opacity-30 italic">
                     The fellowship grows stronger. {campaign.currentEnemyIndex < campaign.enemies.length ? "The next shadow awaits." : "The realm is safe... for now."}
@@ -808,90 +803,84 @@ export default function App() {
               </div>
             </div>
           </div>
+        )
+      }
 
-          <button
-            onClick={() => setVictoryData(null)}
-            className="w-full py-5 button-ink text-lg font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-2xl ring-4 ring-black/20"
-          >
-            Onward
-          </button>
-        </div>
-      )}
+      {
+        resolutionData && (
+          <div className="fixed inset-0 z-[170] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl animate-in zoom-in-95 duration-500 overflow-y-auto">
+            <div className="rpg-card max-w-xl w-full p-0 shadow-[0_0_150px_rgba(0,0,0,0.5)] border-4 border-[#3a352f] my-auto">
+              <div className="bg-[#3a352f] text-[#fdf6e3] py-8 text-center relative">
+                <div className="text-[10px] font-bold uppercase tracking-[0.5em] opacity-40 mb-2">Weekly Ritual Complete</div>
+                <h3 className="text-4xl font-black uppercase tracking-[0.1em] leading-none mb-2 drop-shadow-lg">
+                  The Resolution
+                </h3>
+                <div className="h-1 w-24 bg-[#8b0000] mx-auto mt-4"></div>
+              </div>
 
-      {resolutionData && (
-        <div className="fixed inset-0 z-[170] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl animate-in zoom-in-95 duration-500 overflow-y-auto">
-          <div className="rpg-card max-w-xl w-full p-0 shadow-[0_0_150px_rgba(0,0,0,0.5)] border-4 border-[#3a352f] my-auto">
-            <div className="bg-[#3a352f] text-[#fdf6e3] py-8 text-center relative">
-              <div className="text-[10px] font-bold uppercase tracking-[0.5em] opacity-40 mb-2">Weekly Ritual Complete</div>
-              <h3 className="text-4xl font-black uppercase tracking-[0.1em] leading-none mb-2 drop-shadow-lg">
-                The Resolution
-              </h3>
-              <div className="h-1 w-24 bg-[#8b0000] mx-auto mt-4"></div>
-            </div>
-
-            <div className="p-8 bg-[#fdf6e3]">
-              <div className="space-y-8">
-                {/* Fellowship Performance */}
-                <section>
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-4 border-b border-[#5c5346]/10 pb-2">Fellowship Status</h4>
-                  <div className="space-y-4">
-                    {resolutionData.participants.map((p: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center bg-white/40 p-3 rounded border border-[#5c5346]/5">
-                        <div className="flex flex-col">
-                          <span className="text-lg font-black uppercase tracking-tight leading-none">{p.name}</span>
-                          <span className="text-[10px] font-bold opacity-40 uppercase mt-1">
-                            {p.workouts} / {p.goal} Oaths Kept {p.looted && <span className="text-[#8b0000] ml-1">• Looted!</span>}
-                          </span>
+              <div className="p-8 bg-[#fdf6e3]">
+                <div className="space-y-8">
+                  {/* Fellowship Performance */}
+                  <section>
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-4 border-b border-[#5c5346]/10 pb-2">Fellowship Status</h4>
+                    <div className="space-y-4">
+                      {resolutionData.participants.map((p: any, idx: number) => (
+                        <div key={idx} className="flex justify-between items-center bg-white/40 p-3 rounded border border-[#5c5346]/5">
+                          <div className="flex flex-col">
+                            <span className="text-lg font-black uppercase tracking-tight leading-none">{p.name}</span>
+                            <span className="text-[10px] font-bold opacity-40 uppercase mt-1">
+                              {p.workouts} / {p.goal} Oaths Kept {p.looted && <span className="text-[#8b0000] ml-1">• Looted!</span>}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            {p.statusChange === 'inspired' && <span className="text-[9px] font-black uppercase tracking-widest bg-yellow-500/20 text-yellow-700 px-2 py-1 rounded border border-yellow-500/20">✨ Inspired</span>}
+                            {p.statusChange === 'cursed' && <span className="text-[9px] font-black uppercase tracking-widest bg-black/10 text-gray-700 px-2 py-1 rounded border border-black/10">💀 Cursed</span>}
+                            {p.statusChange === 'saved' && <span className="text-[9px] font-black uppercase tracking-widest bg-green-500/10 text-green-700 px-2 py-1 rounded border border-green-500/10">🛡️ Saved</span>}
+                            {p.statusChange === 'sustained' && <span className="text-[9px] font-black uppercase tracking-widest bg-blue-500/5 text-blue-700 px-2 py-1 rounded border border-blue-500/10">⚖️ Sustained</span>}
+                          </div>
                         </div>
-                        <div className="text-right">
-                          {p.statusChange === 'inspired' && <span className="text-[9px] font-black uppercase tracking-widest bg-yellow-500/20 text-yellow-700 px-2 py-1 rounded border border-yellow-500/20">✨ Inspired</span>}
-                          {p.statusChange === 'cursed' && <span className="text-[9px] font-black uppercase tracking-widest bg-black/10 text-gray-700 px-2 py-1 rounded border border-black/10">💀 Cursed</span>}
-                          {p.statusChange === 'saved' && <span className="text-[9px] font-black uppercase tracking-widest bg-green-500/10 text-green-700 px-2 py-1 rounded border border-green-500/10">🛡️ Saved</span>}
-                          {p.statusChange === 'sustained' && <span className="text-[9px] font-black uppercase tracking-widest bg-blue-500/5 text-blue-700 px-2 py-1 rounded border border-blue-500/10">⚖️ Sustained</span>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
+                      ))}
+                    </div>
+                  </section>
 
-                {/* Shadow Growth & Shrink */}
-                <section className={`${resolutionData.shadowShrinkHP > 0 ? 'bg-green-600/5 border-green-600/10' : 'bg-[#8b0000]/5 border-[#8b0000]/10'} border p-6 relative overflow-hidden`}>
-                  <div className="absolute top-0 right-0 p-2 opacity-5 text-4xl font-black">{resolutionData.shadowShrinkHP > 0 ? '✨' : '🌑'}</div>
-                  <h4 className={`text-[10px] font-bold uppercase tracking-widest ${resolutionData.shadowShrinkHP > 0 ? 'text-green-700' : 'text-[#8b0000]'} mb-2`}>
-                    {resolutionData.shadowShrinkHP > 0 ? 'The Shadow Recedes' : 'The Shadow Growth'}
-                  </h4>
-                  {resolutionData.shadowShrinkHP > 0 ? (
-                    <>
-                      <div className="text-3xl font-black text-green-700 mb-1">-{resolutionData.shadowShrinkHP} HP</div>
+                  {/* Shadow Growth & Shrink */}
+                  <section className={`${resolutionData.shadowShrinkHP > 0 ? 'bg-green-600/5 border-green-600/10' : 'bg-[#8b0000]/5 border-[#8b0000]/10'} border p-6 relative overflow-hidden`}>
+                    <div className="absolute top-0 right-0 p-2 opacity-5 text-4xl font-black">{resolutionData.shadowShrinkHP > 0 ? '✨' : '🌑'}</div>
+                    <h4 className={`text-[10px] font-bold uppercase tracking-widest ${resolutionData.shadowShrinkHP > 0 ? 'text-green-700' : 'text-[#8b0000]'} mb-2`}>
+                      {resolutionData.shadowShrinkHP > 0 ? 'The Shadow Recedes' : 'The Shadow Growth'}
+                    </h4>
+                    {resolutionData.shadowShrinkHP > 0 ? (
+                      <>
+                        <div className="text-3xl font-black text-green-700 mb-1">-{resolutionData.shadowShrinkHP} HP</div>
+                        <p className="text-[11px] italic opacity-70 leading-relaxed">
+                          The fellowship's collective zeal burns through the darkness! Your extra effort has stripped the final boss of their power.
+                        </p>
+                      </>
+                    ) : resolutionData.shadowGrowthHP > 0 ? (
+                      <>
+                        <div className="text-3xl font-black text-[#8b0000] mb-1">+{resolutionData.shadowGrowthHP} HP</div>
+                        <p className="text-[11px] italic opacity-70 leading-relaxed">
+                          The final foe devours {resolutionData.totalMisses} missed Oaths from the fellowship. The darkness thickens...
+                        </p>
+                      </>
+                    ) : (
                       <p className="text-[11px] italic opacity-70 leading-relaxed">
-                        The fellowship's collective zeal burns through the darkness! Your extra effort has stripped the final boss of their power.
+                        The fellowship held firm. The shadow remains stunted this cycle.
                       </p>
-                    </>
-                  ) : resolutionData.shadowGrowthHP > 0 ? (
-                    <>
-                      <div className="text-3xl font-black text-[#8b0000] mb-1">+{resolutionData.shadowGrowthHP} HP</div>
-                      <p className="text-[11px] italic opacity-70 leading-relaxed">
-                        The final foe devours {resolutionData.totalMisses} missed Oaths from the fellowship. The darkness thickens...
-                      </p>
-                    </>
-                  ) : (
-                    <p className="text-[11px] italic opacity-70 leading-relaxed">
-                      The fellowship held firm. The shadow remains stunted this cycle.
-                    </p>
-                  )}
-                </section>
+                    )}
+                  </section>
 
-                <button
-                  onClick={() => setResolutionData(null)}
-                  className="w-full py-5 button-ink text-lg font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
-                >
-                  Enter Next Week
-                </button>
+                  <button
+                    onClick={() => setResolutionData(null)}
+                    className="w-full py-5 button-ink text-lg font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
+                  >
+                    Enter Next Week
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )
+        )
       }
 
       {
@@ -952,7 +941,7 @@ export default function App() {
                         </div>
                       )}
                       {p.isInspired && (
-                        <div className="absolute -top-2 -left-2 bg-yellow-400 text-[#3a352f] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest -rotate-12 z-10 shadow-md ring-2 ring-yellow-200 animate-pulse">
+                        <div className="absolute -top-2 -right-2 bg-yellow-400 text-[#3a352f] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 z-10 shadow-md ring-2 ring-yellow-200 animate-pulse">
                           Inspired
                         </div>
                       )}
