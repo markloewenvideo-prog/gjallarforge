@@ -11,7 +11,7 @@ We recommend **Render** or **Railway** for hosting the Node.js/Express backend.
 1. **Root Directory**: `server` (CRITICAL: Set this in your Render/Railway settings)
 2. **Dynamic Runtime**: Node.js
 3. **Build Command**: `npm install && npx prisma generate && npm run build`
-4. **Start Command**: `npx prisma migrate deploy && npm start`
+4. **Start Command**: `npx prisma db push && npm start`
 
 ### Environment Variables (ON RENDER)
 1. Go to the **Environment** tab in your Render service.
@@ -85,6 +85,13 @@ If your terminal asks for a password and you use Google sign-in, you must use a 
 
 ## 5. Troubleshooting: "Commits on the remote" or "Behind" errors
 If Git/GitHub Desktop won't let you push because the remote already has content:
+
+#### ⚔️ The "Migration Reset" Ritual (Fixes Provider Mismatch)
+If you see an error about `sqlite` not matching `postgresql` in your migration files:
+1. **Delete** the folder: `server/prisma/migrations`.
+2. **Commit & Push** this deletion in GitHub Desktop.
+3. On Render, make sure your **Start Command** is set to:
+   `npx prisma db push && npm start`
 
 ### The Overwrite Ritual (Use with Caution)
 This will tell GitHub: "Ignore everything you have, my local computer is the source of truth."
