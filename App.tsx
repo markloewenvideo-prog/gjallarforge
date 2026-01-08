@@ -38,12 +38,13 @@ const KragCommandments: React.FC<{ onClose?: () => void; noMargin?: boolean }> =
       )}
       <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest mb-8 border-b-2 border-[#5c5346] pb-2 text-center">Krag’s Commandments</h2>
       <ul className="space-y-4 text-sm md:text-base italic font-medium leading-relaxed opacity-90 max-w-xl mx-auto">
-        <li className="flex gap-4"><span>⚔️</span> "Roll the d20! Your weapon’s modifier (+0, +1, etc.) adds directly to your raw effort."</li>
-        <li className="flex gap-4"><span>📜</span> "The Effective Roll determines Hit Quality: Glancing (2-5), Solid (6-10), Strong (11-15), or Critical (16-19)."</li>
-        <li className="flex gap-4"><span>🐉</span> "An Effective 20 is an AUTO-KILL. The beast falls instantly. Victory is yours."</li>
-        <li className="flex gap-4"><span>⚡</span> "Damage scales with Level. Higher power allows you to roll more dice (ceil of level / 2) on every strike."</li>
+        <li className="flex gap-4"><span>⚔️</span> "Every drop of sweat counts. Every workout always strikes the foe, unless the fates (d20) fumble."</li>
+        <li className="flex gap-4"><span>📜</span> "Damage is a simple sum of your effort: Roll d20 + Your Strength (Level) + Weapon Modifier."</li>
+        <li className="flex gap-4 text-[#8b0000] font-black"><span>💀</span> "A Natural 20 is an INSTANT KILL! The foe falls immediately, and you earn an extra Pip!"</li>
+        <li className="flex gap-4 opacity-50"><span>💨</span> "A Natural 1 is a Total Miss. You deal 0 damage this strike."</li>
+        <li className="flex gap-4"><span>✨</span> "Inspired Heroes (Gold) have gone above and beyond. Do extra workouts to earn this blessing."</li>
+        <li className="flex gap-4 text-[#8b0000]"><span>🌑</span> "Shadow Growth & Shrink: Missed workouts strengthen the final boss, but extra effort shrinks its vitality."</li>
         <li className="flex gap-4"><span>💎</span> "When a foe falls, the one with the highest total D20 rolls (The Fair Sweat Rule) claims the loot."</li>
-        <li className="flex gap-4"><span>⚠️</span> "A Natural 1 on the d20 is a Fumble. You deal no damage and are cursed (no loot) for that battle."</li>
         <li className="flex gap-4 font-black uppercase tracking-tighter not-italic mt-6 text-[#3a352f] justify-center text-lg md:text-xl border-t border-[#5c5346]/10 pt-4 text-center">"Now back to work."</li>
       </ul>
     </div>
@@ -52,27 +53,33 @@ const KragCommandments: React.FC<{ onClose?: () => void; noMargin?: boolean }> =
 
 const EnemyDisplay: React.FC<{ enemy: any }> = ({ enemy }) => {
   const hpPercent = (enemy.hp / enemy.maxHp) * 100;
+  const adj = enemy.adjustmentHp || 0;
+
   return (
     <div className="text-center mb-6">
       <div className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-2">Active Bounty</div>
       <div className="h-px bg-[#5c5346]/20 w-16 mx-auto mb-6" />
-      <div className="rpg-card dashed-card p-6 md:p-8 text-left bg-[#fdf6e3]/50">
+      <div className="rpg-card dashed-card p-6 md:p-8 text-left bg-[#fdf6e3]/50 relative overflow-hidden">
+        {adj !== 0 && (
+          <div className={`absolute top-0 right-0 py-1 px-4 text-[9px] font-black uppercase tracking-widest rotate-0 z-10 shadow-sm border-l border-b ${adj > 0 ? 'bg-[#8b0000] text-[#fdf6e3] border-[#8b0000]/20' : 'bg-green-700 text-[#fdf6e3] border-green-700/20'}`}>
+            {adj > 0 ? `+${adj} Shadow Growth` : `${adj} Shadow Shrink`}
+          </div>
+        )}
+
         <div className="flex justify-between items-start mb-6">
           <div className="flex-1">
             <h2 className="text-3xl font-black uppercase tracking-tight mb-2 leading-none">{enemy.name}</h2>
             <p className="italic opacity-70 text-lg leading-snug">{enemy.description}</p>
           </div>
-          <div className="ml-4">
-            <div className="strength-box text-center bg-white/50 border-2 border-[#5c5346]/20">
-              <div className="text-[8px] font-bold uppercase tracking-widest opacity-60">Protection</div>
-              <div className="text-3xl font-bold pencil-font">{enemy.ac}</div>
-            </div>
-          </div>
         </div>
 
         <div className="mb-2 flex justify-between text-[10px] items-end font-bold uppercase opacity-60">
           <span className="tracking-widest">Vitality</span>
-          <span className="pencil-font text-xs uppercase tracking-tighter">{Math.ceil(enemy.hp)} / {enemy.maxHp} HP</span>
+          <div className="flex items-center gap-2">
+            {adj > 0 && <span className="text-[#8b0000] animate-pulse">🛡️ (+{adj} Barrier)</span>}
+            {adj < 0 && <span className="text-green-700 animate-pulse">✨ ({adj} Fracture)</span>}
+            <span className="pencil-font text-xs uppercase tracking-tighter ml-2">{Math.ceil(enemy.hp)} / {enemy.maxHp} HP</span>
+          </div>
         </div>
         <div className="h-5 bg-black/5 border border-[#5c5346]/30 mb-8 relative overflow-hidden rounded-sm">
           <div
@@ -104,7 +111,9 @@ export default function App() {
   const [createForm, setCreateForm] = useState({
     weeks: 4,
     workoutsPerWeek: 3,
-    participantsText: ""
+    participantsText: "",
+    initialEnemyName: "",
+    initialEnemyDesc: ""
   });
 
   // Game UI State
@@ -116,6 +125,10 @@ export default function App() {
   const [enlistName, setEnlistName] = useState("");
   const [victoryData, setVictoryData] = useState<any>(null);
   const [showAbandonModal, setShowAbandonModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resolutionData, setResolutionData] = useState<any>(null);
+  const [nextVillainName, setNextVillainName] = useState("");
+  const [nextVillainDesc, setNextVillainDesc] = useState("");
 
   // --- Effects ---
 
@@ -191,7 +204,11 @@ export default function App() {
 
       console.log("[FRONTEND] Sending createCampaign request...");
       // Empty string for name, backend will default to "The Gjallar Forge"
-      const newCampaign = await api.createCampaign("", config, names);
+      const initialEnemy = createForm.initialEnemyName.trim()
+        ? { name: createForm.initialEnemyName.trim(), description: createForm.initialEnemyDesc.trim() }
+        : undefined;
+
+      const newCampaign = await api.createCampaign("", config, names, initialEnemy);
       console.log("[FRONTEND] Campaign created successfully:", newCampaign.id);
       setCampaign(newCampaign);
       localStorage.setItem('forge_campaign_id', newCampaign.id);
@@ -225,6 +242,9 @@ export default function App() {
   };
 
   const handleAction = async (type: 'attack', participantId: string) => {
+    if (activeRoll || isSubmitting) return;
+    setIsSubmitting(true);
+
     // Clear any existing roll first
     setActiveRoll(null);
 
@@ -259,42 +279,33 @@ export default function App() {
           setActiveRoll({
             pId: participantId,
             roll: res.roll,
-            effectiveRoll: res.effectiveRoll,
-            quality: res.quality,
-            isCrit: res.quality === 'CRITICAL' || res.quality === 'AUTO-KILL',
-            isFumble: res.roll === 1,
-            hit: res.quality !== 'MISS',
+            strength: res.strength,
+            modifier: res.modifier,
+            isCrit: res.isCrit,
+            isMiss: res.isMiss,
+            hit: !res.isMiss,
             damage: res.damage,
             resolving: false,
             phase: 2,
             message: msg,
-            strength: participant?.level || 0,
             killed: res.killed
           });
 
-          // Phase 3: Auto-fade after 5 seconds
-          const fadeTimeout = setTimeout(() => {
-            setActiveRoll(current => {
-              if (current && current.phase === 2 && current.pId === participantId) {
-                if (current.killed) {
-                  const currentEnemy = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
-                  const winnerParticipant = campaign.participants.find((p: any) => p.id === participantId);
-                  const winnerName = winnerParticipant?.name || "The Fellowship";
+          // Manual closure requested by user - remove auto-fade
+          if (res.killed) {
+            const currentEnemy = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
+            const winnerParticipant = campaign.participants.find((p: any) => p.id === participantId);
+            const winnerName = winnerParticipant?.name || "The Fellowship";
 
-                  setVictoryData({
-                    winner: winnerName,
-                    winnerLevel: winnerParticipant?.level || 1,
-                    bounty: WEAPONS[res.tier as WeaponTier]?.name || "a bounty",
-                    weaponTier: res.tier,
-                    stats: WEAPONS[res.tier as WeaponTier]?.dice || "??",
-                    enemyName: currentEnemy?.name || "The Foe"
-                  });
-                }
-                return null;
-              }
-              return current;
+            setVictoryData({
+              winner: winnerName,
+              winnerLevel: winnerParticipant?.level || 1,
+              bounty: WEAPONS[res.tier as WeaponTier]?.name || "a bounty",
+              weaponTier: res.tier,
+              stats: WEAPONS[res.tier as WeaponTier]?.dice || "??",
+              enemyName: currentEnemy?.name || "The Foe"
             });
-          }, 5000);
+          }
         } else {
           setActiveRoll(null);
         }
@@ -303,6 +314,8 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setActiveRoll(null);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -367,9 +380,12 @@ export default function App() {
   };
 
   const handleForgeAhead = async () => {
+    if (!window.confirm("Are you sure you wish to advance the week? This ritual will reset weekly pips, evaluate oaths, and might strengthen the final shadow if goals were missed.")) return;
+
     try {
-      const updated = await api.forgeAhead(campaign.id);
+      const { campaign: updated, summary } = await api.forgeAhead(campaign.id);
       setCampaign(updated);
+      setResolutionData(summary);
       setShowForgeAhead(false);
     } catch (e) {
       console.error("Forge Ahead failed", e);
@@ -385,6 +401,19 @@ export default function App() {
     } catch (e) {
       console.error("Retire hero failed", e);
     }
+  };
+
+  const handleForgeOnwards = async () => {
+    if (nextVillainName.trim()) {
+      try {
+        await api.renameEnemy(campaign.id, campaign.currentEnemyIndex, nextVillainName.trim(), nextVillainDesc.trim());
+      } catch (e) {
+        console.error("Rename failed", e);
+      }
+    }
+    setVictoryData(null);
+    setNextVillainName("");
+    setNextVillainDesc("");
   };
 
   // Back navigation
@@ -499,6 +528,35 @@ export default function App() {
               <p className="text-[9px] opacity-40 uppercase tracking-widest mt-2">The fellowship will be bound to this quest immediately.</p>
             </div>
 
+            <div className="space-y-6 pt-6 border-t border-[#5c5346]/10">
+              <div className="text-center">
+                <div className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-1">Ritual of the First Shadow</div>
+                <h4 className="text-xl font-black uppercase tracking-tight">The Primordial Foe</h4>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">The Shadow's Identity (Name)</label>
+                  <input
+                    type="text"
+                    className="w-full text-xl py-2 border-b-2 border-[#5c5346]/20 bg-transparent focus:border-[#3a352f] transition-colors pencil-font outline-none"
+                    placeholder="e.g. Malakor the Grim"
+                    value={createForm.initialEnemyName}
+                    onChange={e => setCreateForm({ ...createForm, initialEnemyName: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">The Shadow's Legend (Flavor)</label>
+                  <textarea
+                    className="w-full p-4 border-2 border-[#5c5346]/10 bg-black/5 h-24 pencil-font text-sm outline-none focus:border-[#3a352f]/30 transition-colors"
+                    placeholder="What terror greets the fellowship?"
+                    value={createForm.initialEnemyDesc}
+                    onChange={e => setCreateForm({ ...createForm, initialEnemyDesc: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
@@ -605,35 +663,29 @@ export default function App() {
                 <div className="mb-6 relative flex flex-col items-center">
                   <div className="flex items-center gap-6 mb-8 mt-2">
                     <div className="text-center">
-                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">D20</div>
+                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Basis</div>
                       <div className="text-4xl font-black">{activeRoll.roll}</div>
                     </div>
                     <div className="text-2xl font-light opacity-30 mt-4">+</div>
                     <div className="text-center">
-                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Weapon</div>
-                      <div className="text-4xl font-black">{activeRoll.effectiveRoll - activeRoll.roll >= 0 ? `+${activeRoll.effectiveRoll - activeRoll.roll}` : activeRoll.effectiveRoll - activeRoll.roll}</div>
+                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Strength</div>
+                      <div className="text-4xl font-black">{activeRoll.strength}</div>
                     </div>
-                    <div className="text-2xl font-light opacity-30 mt-4">=</div>
+                    <div className="text-2xl font-light opacity-30 mt-4">+</div>
                     <div className="text-center">
-                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Effective</div>
-                      <div className={`text-5xl font-black ${activeRoll.isCrit ? 'text-[#8b0000] animate-pulse' : ''}`}>{activeRoll.effectiveRoll}</div>
+                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Weapon</div>
+                      <div className="text-4xl font-black">{activeRoll.modifier}</div>
                     </div>
                   </div>
 
-                  <div className={`text-4xl font-black uppercase tracking-tighter mb-4 ${activeRoll.hit ? 'text-black' : 'text-[#8b0000] opacity-50'}`}>
-                    {activeRoll.quality}
+                  <div className="text-2xl font-black uppercase tracking-[0.4em] mb-2 text-[#8b0000]/60">
+                    {activeRoll.isCrit ? "INSTANT KILL!" : activeRoll.isMiss ? "TOTAL MISS" : "Total Strike"}
                   </div>
 
-                  {activeRoll.hit && (
-                    <div className="flex flex-col items-center">
-                      <div className="text-[8px] font-bold uppercase tracking-widest opacity-40 mb-1">
-                        Power Level {activeRoll.strength} • {Math.ceil(activeRoll.strength / 2)} Dice
-                      </div>
-                      <div className="text-6xl font-black pencil-font mb-2 text-[#3a352f]">
-                        {activeRoll.damage} DMG
-                      </div>
-                    </div>
-                  )}
+                  <div className={`text-7xl font-black pencil-font ${activeRoll.isCrit ? 'text-[#8b0000] scale-110 drop-shadow-xl' : activeRoll.isMiss ? 'text-gray-400 line-through' : 'text-[#3a352f]'}`}>
+                    {activeRoll.isCrit ? "MAX" : activeRoll.damage} <span className="text-xl uppercase tracking-tighter opacity-30">DMG</span>
+                  </div>
+                  {activeRoll.isCrit && <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b0000] animate-bounce mt-2">The Foe is Vanquished!</div>}
                 </div>
 
                 <div className="pt-8 border-t-2 border-[#5c5346]/10 relative">
@@ -652,32 +704,39 @@ export default function App() {
 
       {victoryData && (
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl animate-in zoom-in-95 duration-700">
-          <div className="rpg-card max-w-2xl w-full p-0 overflow-hidden shadow-[0_0_100px_rgba(217,197,163,0.1)] border-4 border-[#5c5346]">
+          <div className="rpg-card max-w-sm w-full p-0 overflow-hidden shadow-[0_0_100px_rgba(217,197,163,0.1)] border-4 border-[#5c5346] relative">
+            <button
+              onClick={() => setVictoryData(null)}
+              className="absolute top-4 right-4 text-xs font-bold opacity-30 hover:opacity-100 uppercase tracking-widest z-50 text-[#fdf6e3]"
+            >
+              ×
+            </button>
+
             {/* The Placard Header */}
-            <div className="bg-[#5c5346] text-[#fdf6e3] py-12 text-center relative">
-              <div className="text-8xl mb-6 animate-bounce">🏆</div>
-              <h3 className="text-7xl font-black uppercase tracking-[0.2em] leading-none mb-2 drop-shadow-lg">
+            <div className="bg-[#5c5346] text-[#fdf6e3] py-8 text-center relative">
+              <div className="text-6xl mb-4 animate-bounce">🏆</div>
+              <h3 className="text-4xl font-black uppercase tracking-[0.2em] leading-none mb-2 drop-shadow-lg">
                 Victory!
               </h3>
               <div className="text-[10px] font-bold uppercase tracking-[0.5em] opacity-60">The Bounty Hunt is Concluded</div>
             </div>
 
             {/* The Decree Content */}
-            <div className="p-12 text-center bg-[#fdf6e3]">
-              <div className="border-4 border-double border-[#3a352f]/40 p-10 relative">
+            <div className="p-6 text-center bg-[#fdf6e3]">
+              <div className="border-4 border-double border-[#3a352f]/40 p-6 relative">
                 {/* Corner Accents */}
                 <div className="absolute -top-3 -left-3 w-6 h-6 border-t-4 border-l-4 border-[#3a352f]/40"></div>
                 <div className="absolute -top-3 -right-3 w-6 h-6 border-t-4 border-r-4 border-[#3a352f]/40"></div>
                 <div className="absolute -bottom-3 -left-3 w-6 h-6 border-b-4 border-l-4 border-[#3a352f]/40"></div>
                 <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-4 border-r-4 border-[#3a352f]/40"></div>
 
-                <p className="text-2xl italic mb-8 opacity-80 leading-snug">
+                <p className="text-lg italic mb-6 opacity-80 leading-snug">
                   "The terror known as <span className="font-bold not-italic">{victoryData.enemyName}</span> has been struck from the living ledger forever."
                 </p>
 
-                <div className="mb-10">
+                <div className="mb-8">
                   <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">Claimant of the Spoils</div>
-                  <div className="text-5xl font-black uppercase tracking-tight text-[#8b0000]">
+                  <div className="text-3xl font-black uppercase tracking-tight text-[#8b0000]">
                     {victoryData.winner}
                   </div>
                 </div>
@@ -687,12 +746,12 @@ export default function App() {
                   <div className="text-sm font-black uppercase tracking-widest text-[#8b0000]">{getLevelTitle(victoryData.winnerLevel)}</div>
                 </div>
 
-                <div className="text-center mb-8 relative">
+                <div className="text-center mb-4 relative">
                   <div className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-2">Bequeathed Armament</div>
-                  <div className="text-2xl font-black uppercase tracking-tight py-3 px-6 border-2 border-[#5c5346]/20 inline-block bg-white/40">
+                  <div className="text-xl font-black uppercase tracking-tight py-2 px-4 border-2 border-[#5c5346]/20 inline-block bg-white/40">
                     {WEAPONS[victoryData.weaponTier]?.name || "Rusty Dagger"}
                   </div>
-                  <div className="mt-3 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-[0.2em] opacity-50">
+                  <div className="mt-2 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-[0.2em] opacity-50">
                     <span className="pencil-font text-xs tracking-tighter">Power: {WEAPONS[victoryData.weaponTier]?.dice}</span>
                     <span>•</span>
                     <span>Tier {victoryData.weaponTier}</span>
@@ -700,16 +759,120 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="mt-12">
+              <div className="mt-8 space-y-6">
+                <div className="h-px bg-[#3a352f]/10 w-full mb-6" />
+
+                {campaign.currentEnemyIndex < campaign.enemies.length && (
+                  <div className="text-left space-y-4 animate-in slide-in-from-bottom-2 duration-500">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 text-center mb-4">Ritual of Succession</div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold uppercase opacity-30 ml-2">The Shadow's Identity (Name)</label>
+                      <input
+                        className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-lg outline-none focus:border-[#3a352f]/40 transition-all text-center"
+                        placeholder="e.g. Malakor the Grim"
+                        value={nextVillainName}
+                        onChange={e => setNextVillainName(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold uppercase opacity-30 ml-2">The Shadow's Legend (Flavour)</label>
+                      <textarea
+                        className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-sm outline-none focus:border-[#3a352f]/40 transition-all min-h-[80px]"
+                        placeholder="What dark deeds have they done?"
+                        value={nextVillainDesc}
+                        onChange={e => setNextVillainDesc(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <button
-                  onClick={() => setVictoryData(null)}
-                  className="w-full py-5 button-ink text-2xl font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all"
+                  onClick={handleForgeOnwards}
+                  className="w-full py-5 button-ink text-lg font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
                 >
                   Forge Onwards
                 </button>
                 <div className="mt-4 text-[9px] font-bold uppercase tracking-widest opacity-30 italic">
-                  The fellowship grows stronger. The next shadow awaits.
+                  The fellowship grows stronger. {campaign.currentEnemyIndex < campaign.enemies.length ? "The next shadow awaits." : "The realm is safe... for now."}
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resolutionData && (
+        <div className="fixed inset-0 z-[170] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl animate-in zoom-in-95 duration-500 overflow-y-auto">
+          <div className="rpg-card max-w-xl w-full p-0 overflow-hidden shadow-[0_0_150px_rgba(0,0,0,0.5)] border-4 border-[#3a352f] my-auto">
+            <div className="bg-[#3a352f] text-[#fdf6e3] py-8 text-center relative">
+              <div className="text-[10px] font-bold uppercase tracking-[0.5em] opacity-40 mb-2">Weekly Ritual Complete</div>
+              <h3 className="text-4xl font-black uppercase tracking-[0.1em] leading-none mb-2 drop-shadow-lg">
+                The Resolution
+              </h3>
+              <div className="h-1 w-24 bg-[#8b0000] mx-auto mt-4"></div>
+            </div>
+
+            <div className="p-8 bg-[#fdf6e3]">
+              <div className="space-y-8">
+                {/* Fellowship Performance */}
+                <section>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-4 border-b border-[#5c5346]/10 pb-2">Fellowship Status</h4>
+                  <div className="space-y-4">
+                    {resolutionData.participants.map((p: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center bg-white/40 p-3 rounded border border-[#5c5346]/5">
+                        <div className="flex flex-col">
+                          <span className="text-lg font-black uppercase tracking-tight leading-none">{p.name}</span>
+                          <span className="text-[10px] font-bold opacity-40 uppercase mt-1">
+                            {p.workouts} / {p.goal} Oaths Kept {p.looted && <span className="text-[#8b0000] ml-1">• Looted!</span>}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          {p.statusChange === 'inspired' && <span className="text-[9px] font-black uppercase tracking-widest bg-yellow-500/20 text-yellow-700 px-2 py-1 rounded border border-yellow-500/20">✨ Inspired</span>}
+                          {p.statusChange === 'cursed' && <span className="text-[9px] font-black uppercase tracking-widest bg-black/10 text-gray-700 px-2 py-1 rounded border border-black/10">💀 Cursed</span>}
+                          {p.statusChange === 'saved' && <span className="text-[9px] font-black uppercase tracking-widest bg-green-500/10 text-green-700 px-2 py-1 rounded border border-green-500/10">🛡️ Saved</span>}
+                          {p.statusChange === 'sustained' && <span className="text-[9px] font-black uppercase tracking-widest opacity-30">Goal Met</span>}
+                          {p.statusChange === 'none' && <span className="text-[9px] font-black uppercase tracking-widest opacity-20">No Change</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* Shadow Growth & Shrink */}
+                <section className={`${resolutionData.shadowShrinkHP > 0 ? 'bg-green-600/5 border-green-600/10' : 'bg-[#8b0000]/5 border-[#8b0000]/10'} border p-6 relative overflow-hidden`}>
+                  <div className="absolute top-0 right-0 p-2 opacity-5 text-4xl font-black">{resolutionData.shadowShrinkHP > 0 ? '✨' : '🌑'}</div>
+                  <h4 className={`text-[10px] font-bold uppercase tracking-widest ${resolutionData.shadowShrinkHP > 0 ? 'text-green-700' : 'text-[#8b0000]'} mb-2`}>
+                    {resolutionData.shadowShrinkHP > 0 ? 'The Shadow Recedes' : 'The Shadow Growth'}
+                  </h4>
+                  {resolutionData.shadowShrinkHP > 0 ? (
+                    <>
+                      <div className="text-3xl font-black text-green-700 mb-1">-{resolutionData.shadowShrinkHP} HP</div>
+                      <p className="text-[11px] italic opacity-70 leading-relaxed">
+                        The fellowship's zeal burns through the darkness! The final boss has been weakened by your extra effort.
+                      </p>
+                    </>
+                  ) : resolutionData.shadowGrowthHP > 0 ? (
+                    <>
+                      <div className="text-3xl font-black text-[#8b0000] mb-1">+{resolutionData.shadowGrowthHP} HP</div>
+                      <p className="text-[11px] italic opacity-70 leading-relaxed">
+                        The final foe devours {resolutionData.totalMisses} missed Oaths. The darkness thickens...
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-[11px] italic opacity-70 leading-relaxed">
+                      The fellowship held firm. The shadow remains stunted this cycle.
+                    </p>
+                  )}
+                </section>
+
+                <button
+                  onClick={() => setResolutionData(null)}
+                  className="w-full py-5 button-ink text-lg font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
+                >
+                  Enter Next Week
+                </button>
               </div>
             </div>
           </div>
@@ -773,6 +936,11 @@ export default function App() {
                     {p.isInspired && (
                       <div className="absolute -top-2 -left-2 bg-yellow-400 text-[#3a352f] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest -rotate-12 z-10 shadow-md ring-2 ring-yellow-200 animate-pulse">
                         Inspired
+                      </div>
+                    )}
+                    {p.isCursed && (
+                      <div className="absolute -top-2 -right-2 bg-[#1a1a1a] text-[#8b0000] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 z-10 shadow-md ring-2 ring-[#8b0000]/40 animate-pulse">
+                        Cursed
                       </div>
                     )}
                     <button
@@ -848,12 +1016,12 @@ export default function App() {
 
                 // Standard Attack
                 if (log.type === 'attack') {
-                  const isCrit = content.isCrit;
+                  const isCrit = content.roll === 20;
                   const isFumble = content.roll === 1;
                   const rollColor = isCrit ? 'text-[#8b0000]' : isFumble ? 'text-gray-400 opacity-50 line-through' : 'text-[#3a352f]';
 
                   return (
-                    <div key={log.id} className="grid grid-cols-[80px_1fr_60px_100px] items-center py-3 px-4 border-b border-[#5c5346]/10 hover:bg-black/5 transition-colors">
+                    <div key={log.id} className="grid grid-cols-[80px_1fr_100px_100px] items-center py-3 px-4 border-b border-[#5c5346]/10 hover:bg-black/5 transition-colors">
                       <div className="pencil-font text-[10px] opacity-40">{timeStr}</div>
                       <div className="flex items-center gap-2">
                         <span className="font-black uppercase tracking-tight text-xs">{content.participantName}</span>
@@ -868,18 +1036,14 @@ export default function App() {
                           </button>
                         )}
                       </div>
-                      <div className={`pencil-font text-lg text-center ${rollColor}`}>
-                        {content.roll}
+                      <div className="text-right text-[10px] font-bold opacity-30 uppercase tracking-tighter">
+                        {content.roll} + {content.strength} + {content.modifier}
                       </div>
                       <div className="text-right">
-                        {content.hit ? (
-                          <div className="flex flex-col items-end">
-                            <span className="text-[10px] font-black tracking-tight">{content.damage} DMG</span>
-                            {isCrit && <span className="text-[7px] font-bold text-[#8b0000] tracking-[0.2em]">CRIT</span>}
-                          </div>
-                        ) : (
-                          <span className="text-[10px] font-bold opacity-30 line-through tracking-widest">MISS</span>
-                        )}
+                        <div className="text-xl font-black pencil-font leading-none">
+                          {content.damage} <span className="text-[8px] uppercase tracking-tighter opacity-40">DMG</span>
+                        </div>
+                        {isCrit && <div className="text-[7px] font-bold text-[#8b0000] tracking-[0.2em] mt-1">CRIT</div>}
                       </div>
                     </div>
                   );
@@ -971,8 +1135,13 @@ export default function App() {
                   >
                     ×
                   </button>
-                  {p.isLootDisqualified && (
-                    <div className="absolute -top-2 -right-2 bg-[#8b0000] text-[#fdf6e3] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 z-10 shadow-md">
+                  {p.isInspired && (
+                    <div className="absolute -top-2 -left-2 bg-yellow-400 text-[#3a352f] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest -rotate-12 z-10 shadow-md ring-2 ring-yellow-200 animate-pulse">
+                      Inspired
+                    </div>
+                  )}
+                  {p.isCursed && (
+                    <div className="absolute -top-2 -right-2 bg-[#1a1a1a] text-[#8b0000] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 z-10 shadow-md ring-2 ring-[#8b0000]/40 animate-pulse">
                       Cursed
                     </div>
                   )}

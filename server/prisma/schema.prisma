@@ -5,9 +5,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -44,6 +43,7 @@ model Participant {
   workoutsThisWeek Int      @default(0)
   isLootDisqualified Boolean @default(false)
   isInspired         Boolean @default(false)
+  isCursed           Boolean @default(false)
 
   // Fair Sweat Loot System fields
   bountyScore          Int      @default(0)
@@ -69,6 +69,7 @@ model Enemy {
   lootWinnerId   String?
   
   order          Int
+  adjustmentHp   Int      @default(0)
 }
 
 model LogEntry {

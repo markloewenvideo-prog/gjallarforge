@@ -40,7 +40,7 @@ export const performAction = async (req: Request, res: Response) => {
             return;
         }
 
-        // --- THE SWORD & THE DIE ---
+        // --- THE IRON PATH (Simplified) ---
 
         // 1. Roll d20
         const rawD20 = Math.floor(Math.random() * 20) + 1;
@@ -49,61 +49,35 @@ export const performAction = async (req: Request, res: Response) => {
         const weapon = WEAPONS[participant.weaponTier as keyof typeof WEAPONS] || WEAPONS[0];
         const weaponBonus = parseInt(weapon.dice.replace('+', '')) || 0;
 
-        // 3. Effective Roll (Clamped 1-20)
-        const effectiveRoll = Math.min(20, Math.max(1, rawD20 + weaponBonus));
+        // 3. Strength (Level)
+        const strength = participant.level;
 
-        let damage = 0;
-        let quality = "";
-        let dieSides = 0;
-        let killed = false;
-        let isAutoKill = false;
+        // 4. Total Damage = D20 + Strength + Weapon Bonus
+        let damage = rawD20 + strength + weaponBonus;
+        let isCrit = false;
+        let isMiss = false;
 
-        // 4. Hit Quality Table & Damage calculation
-        const numDice = Math.ceil(participant.level / 2);
-
-        if (effectiveRoll === 20) {
-            quality = "AUTO-KILL";
-            damage = currentEnemy.hp; // Kill the beast
-            killed = true;
-            isAutoKill = true;
-        } else if (effectiveRoll >= 16) {
-            quality = "CRITICAL";
-            dieSides = 10;
-        } else if (effectiveRoll >= 11) {
-            quality = "STRONG";
-            dieSides = 8;
-        } else if (effectiveRoll >= 6) {
-            quality = "SOLID";
-            dieSides = 6;
-        } else if (effectiveRoll >= 2) {
-            quality = "GLANCING";
-            dieSides = 4;
-        } else {
-            quality = "MISS";
+        if (rawD20 === 20) {
+            damage = currentEnemy.hp; // Instant Kill
+            isCrit = true;
+        } else if (rawD20 === 1) {
             damage = 0;
+            isMiss = true;
         }
 
-        // Roll damage dice (Background)
-        if (dieSides > 0 && !isAutoKill) {
-            for (let i = 0; i < numDice; i++) {
-                damage += Math.floor(Math.random() * dieSides) + 1;
-            }
-        }
+        const isNat20 = rawD20 === 20;
 
         // --- UPDATE STATS ---
-        const isNat20 = rawD20 === 20;
+        // Pips: Nat 20 = 2, else 1
         const pipsToAdd = isNat20 ? 2 : 1;
-        const isNat1 = rawD20 === 1;
 
         await prisma.participant.update({
             where: { id: participant.id },
             data: {
                 totalWorkouts: { increment: pipsToAdd },
                 workoutsThisWeek: { increment: pipsToAdd },
-                isLootDisqualified: isNat1 ? true : undefined,
-                bountyScore: { increment: rawD20 }, // Loot still follows Raw D20
+                bountyScore: { increment: rawD20 },
                 nat20Count: isNat20 ? { increment: 1 } : undefined,
-                isInspired: isNat20 ? true : undefined,
                 highestSingleRoll: {
                     set: Math.max((participant as any).highestSingleRoll, rawD20)
                 },
@@ -118,8 +92,9 @@ export const performAction = async (req: Request, res: Response) => {
         });
 
         const updatedEnemy = await prisma.enemy.findUnique({ where: { id: currentEnemy.id } });
+        let isKill = false;
         if (updatedEnemy && updatedEnemy.hp <= 0) {
-            killed = true;
+            isKill = true;
 
             // Loot Determination
             const eligible = await prisma.participant.findMany({
@@ -175,13 +150,12 @@ export const performAction = async (req: Request, res: Response) => {
                     participantName: participant.name,
                     enemyName: currentEnemy.name,
                     roll: rawD20,
+                    isCrit,
+                    isMiss,
                     modifier: weaponBonus,
-                    effectiveRoll,
-                    quality,
+                    strength,
                     damage,
-                    numDice,
-                    dieSides,
-                    hit: quality !== "MISS"
+                    hit: !isMiss
                 })
             }
         });
@@ -198,7 +172,16 @@ export const performAction = async (req: Request, res: Response) => {
         });
 
         io.to(campaignId).emit('gamestate_update', updatedCampaign);
-        res.json({ success: true, roll: rawD20, effectiveRoll, damage, killed, quality });
+        res.json({
+            success: true,
+            roll: rawD20,
+            damage,
+            killed: isKill,
+            isCrit,
+            isMiss,
+            strength,
+            modifier: weaponBonus
+        });
 
     } catch (error) {
         console.error('Action error:', error);
@@ -280,7 +263,8 @@ export const undoAction = async (req: Request, res: Response) => {
             return;
         }
 
-        const { roll, damage, isCrit, hit, enemyName } = logData;
+        const { roll, damage, hit, enemyName } = logData;
+        const isCrit = logData.isCrit ?? (roll === 20);
 
         // 1. Revert Participant Stats
         const pipsToSubtract = isCrit ? 2 : 1;

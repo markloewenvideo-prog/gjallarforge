@@ -35,11 +35,11 @@ export const api = {
     },
 
     // Campaign
-    createCampaign: async (name: string, config: any, participantsNames: string[]) => {
+    createCampaign: async (name: string, config: any, participantsNames: string[], initialEnemy?: { name: string, description: string }) => {
         const res = await fetch(`${API_URL}/campaigns`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, config, participantsNames })
+            body: JSON.stringify({ name, config, participantsNames, initialEnemy })
         });
         if (!res.ok) throw await res.json();
         return res.json();
@@ -145,6 +145,16 @@ export const api = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ campaignId, participantId })
+        });
+        if (!res.ok) throw await res.json();
+        return res.json();
+    },
+
+    renameEnemy: async (campaignId: string, order: number, name: string, description: string) => {
+        const res = await fetch(`${API_URL}/campaigns/${campaignId}/rename-enemy`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order, name, description })
         });
         if (!res.ok) throw await res.json();
         return res.json();

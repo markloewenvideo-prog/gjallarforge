@@ -18,7 +18,7 @@ const calculateExpectedWeeklyDamage = (numParticipants: number, workoutsPerWeek:
 
 export const createCampaign = async (req: Request, res: Response) => {
     try {
-        const { name: rawName, config: rawConfig, participantsNames } = req.body;
+        const { name: rawName, config: rawConfig, participantsNames, initialEnemy } = req.body;
 
         // Handle config being passed as a string (from our API service)
         const config = typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig;
@@ -42,7 +42,6 @@ export const createCampaign = async (req: Request, res: Response) => {
             if (isFinalBoss) {
                 tier = 'T6';
             } else {
-                // Map progress (0 to 1) across T1 to T5
                 const progress = i / Math.max(1, totalWeeks - 1);
                 if (progress < 0.2) tier = 'T1';
                 else if (progress < 0.4) tier = 'T2';
@@ -55,11 +54,29 @@ export const createCampaign = async (req: Request, res: Response) => {
             const useFunny = Math.random() > 0.5;
             const subPool = useFunny ? pool.funny : pool.regular;
 
-            return subPool[Math.floor(Math.random() * subPool.length)];
+            const baseMonster = subPool[Math.floor(Math.random() * subPool.length)];
+
+            // Override for the first monster if provided
+            if (i === 0 && initialEnemy) {
+                let finalName = initialEnemy.name || baseMonster.name;
+                const isFinalBoss = i === totalWeeks - 1;
+
+                if (isFinalBoss && !finalName.startsWith("The Shadow of")) {
+                    finalName = `The Shadow of ${finalName}`;
+                }
+
+                return {
+                    ...baseMonster,
+                    name: finalName,
+                    description: initialEnemy.description || baseMonster.description
+                };
+            }
+
+            return baseMonster;
         });
         console.log("[DEBUG] Generation complete. Count:", generatedMonsterData.length);
 
-        // 2. Prepare Participants (Ensuring Users exist for foreign key)
+        // 2. Prepare Participants
         const participantsData = [];
         for (const pName of participantsNames) {
             const cleanName = pName.trim();
@@ -109,22 +126,20 @@ export const createCampaign = async (req: Request, res: Response) => {
 
                         const budgetedWorkoutsForThisEnemy = totalCampaignWorkouts * budgetPercentage;
 
-                        // HP Calibration for "The Sword & The Die"
-                        // Avg Damage per hit: (AvgDieSides / 2 + 0.5) * numDice
-                        // NumDice = ceil(expectedLevel / 2)
-                        // Baseline die (Solid Hit) = d6 (3.5 avg)
-                        const expectedDice = Math.ceil(expectedLevel / 2);
-                        const avgDamagePerHit = 3.5 * expectedDice;
+                        // HP Calibration for "The Iron Path" (Simplified)
+                        // Player level increases each week.
+                        // Player weapon is from the previous enemy's drop tier.
+                        const currentWeaponBonus = i === 0 ? 0 : calculateAvgWeaponDamage(getWeaponDropTier(i - 1, totalWeeks));
+                        const avgDamagePerHit = 10.5 + expectedLevel + currentWeaponBonus;
 
-                        // We want the Dragon to take ~40% of the campaign's workout budget
-                        // Other enemies split the remaining 60%
-                        // HP = workouts * avgDamage * toughness_multiplier
-                        // Dragon has higher multiplier for epic feel
+                        // HP = anticipated_workouts * avgDamage * toughness_multiplier
+                        // Toughness 1.5 means the boss is a multi-session effort.
                         const toughness = isBoss ? 1.5 : 1.0;
                         const hp = Math.ceil(budgetedWorkoutsForThisEnemy * avgDamagePerHit * toughness);
 
                         const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
-                        const finalDescription = `${data.description} Beware its ${spell}!`;
+                        // If it was custom provided, don't append the spell/random stuff
+                        const finalDescription = (i === 0 && initialEnemy) ? data.description : `${data.description} Beware its ${spell}!`;
 
                         return {
                             name: data.name,
@@ -326,29 +341,131 @@ export const forgeAhead = async (req: Request, res: Response) => {
 
         const campaign = await prisma.campaign.findUnique({
             where: { id },
-            include: { participants: true }
+            include: { participants: true, logs: { orderBy: { timestamp: 'desc' }, take: 10 } }
         });
 
         if (!campaign) return res.status(404).json({ error: "Campaign not found" });
 
         const config = JSON.parse(campaign.config);
         const oathGoal = config.workoutsPerWeek;
+        const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
 
-        // Process participants
-        const updates = campaign.participants.map(p => {
-            const leveledUp = p.workoutsThisWeek >= oathGoal;
+        // 1. Prepare Summary Data (Before Reset)
+        const summary: any = {
+            totalMisses: 0,
+            totalExtras: 0,
+            shadowGrowthHP: 0,
+            shadowShrinkHP: 0,
+            participants: []
+        };
+
+        // Identify loot winners in the current week (from logs)
+        const lootWinners = campaign.logs
+            .filter(l => l.content.includes('EVENT_LOOT_CLAIMED'))
+            .map(l => {
+                const data = JSON.parse(l.content);
+                return data.winnerName;
+            });
+
+        // 2. Process participants
+        const updates = campaign.participants.map((participant: any) => {
+            const p = participant;
+            const workouts = p.workoutsThisWeek;
+            const hitGoal = workouts >= oathGoal;
+            const extraWorkouts = workouts > oathGoal;
+            const missedGoal = workouts < oathGoal;
+
+            let statusChange: 'inspired' | 'cursed' | 'saved' | 'sustained' | 'none' = 'none';
+            let nextInspired = p.isInspired;
+            let nextCursed = p.isCursed;
+
+            if (extraWorkouts) {
+                if (!p.isInspired) statusChange = 'inspired';
+                nextInspired = true;
+                nextCursed = false;
+            } else if (missedGoal) {
+                if (!p.isCursed) statusChange = 'cursed';
+                nextInspired = false;
+                nextCursed = true;
+            } else if (hitGoal) {
+                if (p.isCursed) statusChange = 'saved';
+                else statusChange = 'sustained';
+                nextCursed = false;
+            }
+
+            summary.participants.push({
+                name: p.name,
+                workouts,
+                goal: oathGoal,
+                statusChange,
+                looted: lootWinners.includes(p.name)
+            });
+
+            if (missedGoal) {
+                summary.totalMisses += (oathGoal - workouts);
+            } else if (extraWorkouts) {
+                summary.totalExtras += (workouts - oathGoal);
+            }
+
             return prisma.participant.update({
                 where: { id: p.id },
                 data: {
-                    level: leveledUp ? p.level + 1 : p.level,
+                    level: hitGoal ? p.level + 1 : p.level,
                     workoutsThisWeek: 0,
                     isLootDisqualified: false,
-                    isInspired: false,
+                    isInspired: nextInspired,
+                    isCursed: nextCursed,
                 } as any
             });
         });
 
-        // Update campaign week
+        // 3. Shadow Growth & Shrink Logic
+        const penaltyPerWorkout = 15 + totalWeeks;
+        const netMisses = summary.totalMisses - summary.totalExtras;
+
+        let hpAdjustment = 0;
+        if (netMisses > 0) {
+            hpAdjustment = netMisses * penaltyPerWorkout;
+            summary.shadowGrowthHP = hpAdjustment;
+        } else if (netMisses < 0) {
+            hpAdjustment = netMisses * penaltyPerWorkout; // This will be negative
+            summary.shadowShrinkHP = Math.abs(hpAdjustment);
+        }
+
+        if (hpAdjustment !== 0) {
+            const finalBoss = await prisma.enemy.findFirst({
+                where: { campaignId: id, order: totalWeeks - 1 }
+            });
+
+            if (finalBoss && !finalBoss.isDead) {
+                // Ensure HP doesn't drop below 1 from shrinking
+                const newHP = Math.max(1, finalBoss.hp + hpAdjustment);
+                const newMaxHP = Math.max(1, finalBoss.maxHp + hpAdjustment);
+
+                await prisma.enemy.update({
+                    where: { id: finalBoss.id },
+                    data: {
+                        hp: newHP,
+                        maxHp: newMaxHP,
+                        adjustmentHp: { increment: hpAdjustment }
+                    }
+                });
+
+                await prisma.logEntry.create({
+                    data: {
+                        campaignId: id,
+                        type: 'system',
+                        content: JSON.stringify({
+                            message: hpAdjustment > 0
+                                ? `SHADOW_GROWTH: The final foe devours your weakness. The boss gains ${hpAdjustment} HP.`
+                                : `SHADOW_SHRINK: The fellowship's zeal burns the shadow. The boss loses ${Math.abs(hpAdjustment)} HP.`
+                        })
+                    }
+                });
+            }
+        }
+
+        // 4. Update Campaign Week
         const campaignUpdate = prisma.campaign.update({
             where: { id },
             data: {
@@ -369,7 +486,7 @@ export const forgeAhead = async (req: Request, res: Response) => {
             include: { participants: true, enemies: true, logs: { orderBy: { timestamp: 'desc' }, take: 50 } }
         });
 
-        res.json(updatedCampaign);
+        res.json({ campaign: updatedCampaign, summary });
     } catch (error) {
         console.error('Forge ahead error:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -401,6 +518,47 @@ export const retireHero = async (req: Request, res: Response) => {
         res.json({ success: true });
     } catch (error) {
         console.error('Retire hero error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+export const renameEnemy = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { order, name, description } = req.body;
+
+        if (order === undefined || !name) {
+            return res.status(400).json({ error: "Missing order or name" });
+        }
+
+        const enemy = await prisma.enemy.findFirst({
+            where: { campaignId: id, order: Number(order) }
+        });
+
+        if (!enemy) return res.status(404).json({ error: "Enemy not found" });
+
+        const campaign = await prisma.campaign.findUnique({
+            where: { id: enemy.campaignId }
+        });
+        const config = campaign ? JSON.parse(campaign.config) : {};
+        const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
+        const isFinalBoss = Number(order) === totalWeeks - 1;
+
+        let finalName = name.trim();
+        if (isFinalBoss && !finalName.startsWith("The Shadow of")) {
+            finalName = `The Shadow of ${finalName}`;
+        }
+
+        const updated = await prisma.enemy.update({
+            where: { id: enemy.id },
+            data: {
+                name: finalName,
+                description: (description || "").trim()
+            }
+        });
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Rename enemy error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
