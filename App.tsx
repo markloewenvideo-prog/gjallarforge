@@ -647,12 +647,6 @@ export default function App() {
       {activeRoll && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]">
           <div className="rpg-card p-4 md:p-12 text-center max-w-sm w-full ink-border shadow-2xl relative">
-            <button
-              onClick={() => setActiveRoll(null)}
-              className="absolute top-4 right-4 text-xs font-bold opacity-30 hover:opacity-100 uppercase tracking-widest"
-            >
-              ×
-            </button>
 
             <div className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-40 mb-8 mt-2">Hand of Fate</div>
 
@@ -702,6 +696,14 @@ export default function App() {
                   <div className="italic text-lg opacity-90 px-2 leading-tight py-2">
                     "{activeRoll.message}"
                   </div>
+                </div>
+                <div className="mt-10">
+                  <button
+                    onClick={() => setActiveRoll(null)}
+                    className="w-full py-4 button-ink font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-lg"
+                  >
+                    Onward
+                  </button>
                 </div>
               </div>
             )}
