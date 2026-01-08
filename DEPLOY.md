@@ -73,7 +73,26 @@ If your terminal asks for a password and you use Google sign-in, you must use a 
 
 ---
 
-## 🏃 Local Verification Before Push
+---
+
+## 5. Troubleshooting: "Commits on the remote" or "Behind" errors
+If Git/GitHub Desktop won't let you push because the remote already has content:
+
+### The Overwrite Ritual (Use with Caution)
+This will tell GitHub: "Ignore everything you have, my local computer is the source of truth."
+
+1. **Open your Terminal** in the root folder: `/Users/msloewen/Downloads/forge-&-fury_-rpg-workout-tracker`
+2. **Commit everything local**:
+   ```bash
+   git add .
+   git commit -m "Forge Core Final Sync"
+   ```
+3. **The Force Push**:
+   ```bash
+   git push origin main --force
+   ```
+
+*Note: If you use Google sign-in and haven't set up a PAT or GitHub CLI, use Option A (GitHub Desktop) above, but when it asks, choose to **Overwrite** or **Force Push**.*
 Before deploying, ensure the build succeeds locally:
 ```bash
 # Backend
