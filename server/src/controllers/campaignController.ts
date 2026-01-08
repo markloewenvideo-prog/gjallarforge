@@ -423,22 +423,28 @@ export const forgeAhead = async (req: Request, res: Response) => {
             const extraWorkouts = workouts > oathGoal;
             const missedGoal = workouts < oathGoal;
 
-            let statusChange: 'inspired' | 'cursed' | 'saved' | 'sustained' | 'none' = 'none';
+            let statusChange: 'inspired' | 'cursed' | 'saved' | 'sustained' = 'sustained';
             let nextInspired = p.isInspired;
             let nextCursed = p.isCursed;
 
             if (extraWorkouts) {
-                if (!p.isInspired) statusChange = 'inspired';
+                statusChange = 'inspired';
                 nextInspired = true;
                 nextCursed = false;
             } else if (missedGoal) {
-                if (!p.isCursed) statusChange = 'cursed';
+                statusChange = 'cursed';
                 nextInspired = false;
                 nextCursed = true;
             } else if (hitGoal) {
-                if (p.isCursed) statusChange = 'saved';
-                else statusChange = 'sustained';
-                nextCursed = false;
+                if (p.isCursed) {
+                    statusChange = 'saved';
+                    nextCursed = false;
+                } else if (p.isInspired) {
+                    statusChange = 'inspired';
+                    nextInspired = true;
+                } else {
+                    statusChange = 'sustained';
+                }
             }
 
             summary.participants.push({
@@ -449,21 +455,22 @@ export const forgeAhead = async (req: Request, res: Response) => {
                 looted: lootWinners.includes(p.name)
             });
 
-            if (missedGoal) {
-                summary.totalMisses += (oathGoal - workouts);
-            } else if (extraWorkouts) {
-                summary.totalExtras += (workouts - oathGoal);
-            }
+            summary.totalMisses += oathGoal; // Total Required
+            summary.totalExtras += workouts; // Total Actual
 
-            if (statusChange !== 'none' && statusChange !== 'sustained') {
+            // Log status changes only if they are transitions (or persistent cursed/inspired)
+            // But we already set meaningful text in UI, system logs should capture transitions.
+            const transitionMessage = (statusChange === 'saved' && p.isCursed) ? `EVENT_SAVED:${p.name} has been cleansed of their curse.` :
+                (statusChange === 'inspired' && !p.isInspired) ? `EVENT_INSPIRED:${p.name} burns with divine inspiration!` :
+                    (statusChange === 'cursed' && !p.isCursed) ? `EVENT_CURSED:${p.name} has stumbled. A shadow clings to them.` : '';
+
+            if (transitionMessage) {
                 statusLogs.push(prisma.logEntry.create({
                     data: {
                         campaignId: id,
                         type: 'system',
                         content: JSON.stringify({
-                            message: statusChange === 'saved' ? `EVENT_SAVED:${p.name} has been cleansed of their curse.` :
-                                statusChange === 'inspired' ? `EVENT_INSPIRED:${p.name} burns with divine inspiration!` :
-                                    statusChange === 'cursed' ? `EVENT_CURSED:${p.name} has stumbled. A shadow clings to them.` : '',
+                            message: transitionMessage,
                             participantName: p.name
                         })
                     }
@@ -496,16 +503,17 @@ export const forgeAhead = async (req: Request, res: Response) => {
             }));
         });
 
-        // 3. Shadow Growth & Shrink Logic
+        // 3. Shadow Growth & Shrink Logic (Collective)
         const penaltyPerWorkout = 15 + totalWeeks;
-        const netMisses = summary.totalMisses - summary.totalExtras;
+        const netMisses = summary.totalMisses - summary.totalExtras; // (Sum Goals) - (Sum Actual)
 
         let hpAdjustment = 0;
         if (netMisses > 0) {
             hpAdjustment = netMisses * penaltyPerWorkout;
+            summary.totalMisses = netMisses; // For display in summary modal
             summary.shadowGrowthHP = hpAdjustment;
         } else if (netMisses < 0) {
-            hpAdjustment = netMisses * penaltyPerWorkout; // This will be negative
+            hpAdjustment = netMisses * penaltyPerWorkout; // Negative
             summary.shadowShrinkHP = Math.abs(hpAdjustment);
         }
 
