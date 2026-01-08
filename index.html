@@ -1,0 +1,174 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forge & Fury: RPG Workout Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=EB+Garamond:ital,wght@0,400;0,500;0,700;1,400&family=Special+Elite&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --parchment-bg: #f5eedc;
+      --table-bg: #d9c5a3;
+      --ink-color: #3a352f;
+      --pencil-color: #5c5346;
+      --accent-ink: #8b0000;
+      --card-bg: #f9f4e8;
+    }
+
+    body {
+      font-family: 'EB Garamond', serif;
+      background-color: var(--table-bg);
+      background-image: url("https://www.transparenttextures.com/patterns/wood-pattern.png");
+      color: var(--ink-color);
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+    }
+
+    h1, h2, h3, .rpg-font {
+      font-family: 'Cinzel', serif;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .pencil-font {
+      font-family: 'Special Elite', cursive;
+    }
+
+    .rpg-card {
+      background-color: var(--card-bg);
+      background-image: url("https://www.transparenttextures.com/patterns/paper-fibers.png");
+      border: 1px solid var(--pencil-color);
+      box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+      position: relative;
+    }
+
+    .dashed-card {
+      border: 1px dashed var(--pencil-color);
+    }
+
+    .ink-border {
+      border: 1px solid var(--pencil-color);
+    }
+
+    .button-ink {
+      background-color: var(--ink-color);
+      color: var(--parchment-bg);
+      font-family: 'Cinzel', serif;
+      border: 1px solid var(--ink-color);
+      transition: all 0.2s;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+
+    .button-ink:hover {
+      background-color: transparent;
+      color: var(--ink-color);
+    }
+
+    .button-hollow {
+      border: 1px solid var(--ink-color);
+      background: transparent;
+      color: var(--ink-color);
+      font-family: 'Cinzel', serif;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      transition: all 0.2s;
+    }
+
+    .button-hollow:hover {
+      background: var(--ink-color);
+      color: var(--parchment-bg);
+    }
+
+    .button-red-hollow {
+      border: 1px solid var(--accent-ink);
+      background: transparent;
+      color: var(--accent-ink);
+      font-family: 'Cinzel', serif;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      transition: all 0.2s;
+    }
+
+    .button-red-hollow:hover {
+      background: var(--accent-ink);
+      color: var(--parchment-bg);
+    }
+
+    /* Hand-drawn style scrollbar */
+    ::-webkit-scrollbar {
+      width: 10px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--table-bg);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--pencil-color);
+      border: 2px solid var(--table-bg);
+    }
+
+    input[type="text"], input[type="number"], textarea {
+      background: transparent;
+      border: 1px solid var(--pencil-color);
+      font-family: 'EB Garamond', serif;
+      color: var(--ink-color);
+      padding: 0.5rem;
+      outline: none;
+    }
+
+    @keyframes spin-slow {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .animate-spin-slow {
+      animation: spin-slow 1s linear infinite;
+    }
+
+    .strike-button {
+      background: var(--card-bg);
+      border: 1px solid var(--pencil-color);
+      padding: 1rem 2rem;
+      text-align: center;
+      box-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+      transition: all 0.2s;
+    }
+
+    .strike-button:hover {
+      background: #fdf6e3;
+      transform: translateY(-2px);
+      box-shadow: 4px 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .strength-box {
+      border: 1.5px solid var(--ink-color);
+      padding: 0.25rem 0.5rem;
+      display: inline-block;
+      min-width: 3rem;
+    }
+
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="p-0 m-0">
+  <div id="root"></div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

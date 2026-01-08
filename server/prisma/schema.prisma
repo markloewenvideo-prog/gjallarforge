@@ -1,0 +1,81 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  username     String        @unique
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  participants Participant[]
+}
+
+model Campaign {
+  id           String        @id @default(uuid())
+  name         String
+  config       String 
+  currentWeek  Int           @default(1)
+  currentEnemyIndex Int      @default(0)
+  createdAt    DateTime      @default(now())
+  participants Participant[]
+  enemies      Enemy[]
+  logs         LogEntry[]
+}
+
+model Participant {
+  id         String   @id @default(uuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  campaignId String
+  
+  name             String
+  level            Int      @default(1)
+  weaponTier       Int      @default(0) 
+  totalWorkouts    Int      @default(0)
+  workoutsThisWeek Int      @default(0)
+  isLootDisqualified Boolean @default(false)
+  isInspired         Boolean @default(false)
+
+  // Fair Sweat Loot System fields
+  bountyScore          Int      @default(0)
+  nat20Count           Int      @default(0)
+  highestSingleRoll   Int      @default(0)
+  bountyScoreUpdatedAt DateTime @default(now())
+  
+  joinedAt   DateTime @default(now())
+}
+
+model Enemy {
+  id             String   @id @default(uuid())
+  campaign       Campaign @relation(fields: [campaignId], references: [id])
+  campaignId     String
+  
+  name           String
+  description    String
+  hp             Int
+  maxHp          Int
+  ac             Int
+  weaponDropTier Int
+  isDead         Boolean  @default(false)
+  lootWinnerId   String?
+  
+  order          Int
+}
+
+model LogEntry {
+  id         String   @id @default(uuid())
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  campaignId String
+  
+  type       String   
+  content    String   
+  timestamp  DateTime @default(now())
+}
