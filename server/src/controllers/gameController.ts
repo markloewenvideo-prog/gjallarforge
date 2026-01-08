@@ -68,35 +68,36 @@ export const performAction = async (req: Request, res: Response) => {
         const isNat20 = rawD20 === 20;
 
         // --- UPDATE STATS ---
-        // Pips: Nat 20 = 2, else 1
+        // --- UPDATE STATS ---
         const pipsToAdd = isNat20 ? 2 : 1;
 
-        await prisma.participant.update({
-            where: { id: participant.id },
-            data: {
-                totalWorkouts: { increment: pipsToAdd },
-                workoutsThisWeek: { increment: pipsToAdd },
-                bountyScore: { increment: rawD20 },
-                nat20Count: isNat20 ? { increment: 1 } : undefined,
-                highestSingleRoll: {
-                    set: Math.max((participant as any).highestSingleRoll, rawD20)
-                },
-                bountyScoreUpdatedAt: new Date()
-            } as any
-        });
+        console.log(`[DEBUG] Updating pips for ${participant.name}: +${pipsToAdd}`);
 
-        // Update Enemy
-        await prisma.enemy.update({
-            where: { id: currentEnemy.id },
-            data: { hp: { decrement: damage } }
-        });
+        const [updatedParticipant, _enemyUpdate] = await prisma.$transaction([
+            prisma.participant.update({
+                where: { id: participant.id },
+                data: {
+                    totalWorkouts: { increment: pipsToAdd },
+                    workoutsThisWeek: { increment: pipsToAdd },
+                    bountyScore: { increment: rawD20 },
+                    nat20Count: isNat20 ? { increment: 1 } : undefined,
+                    highestSingleRoll: {
+                        set: Math.max((participant as any).highestSingleRoll, rawD20)
+                    },
+                    bountyScoreUpdatedAt: new Date()
+                } as any
+            }),
+            prisma.enemy.update({
+                where: { id: currentEnemy.id },
+                data: { hp: { decrement: damage } }
+            })
+        ]);
 
         const updatedEnemy = await prisma.enemy.findUnique({ where: { id: currentEnemy.id } });
         let isKill = false;
         if (updatedEnemy && updatedEnemy.hp <= 0) {
             isKill = true;
 
-            // Loot Determination
             const eligible = await prisma.participant.findMany({
                 where: { campaignId, isLootDisqualified: false },
                 orderBy: [
@@ -166,12 +167,15 @@ export const performAction = async (req: Request, res: Response) => {
             where: { id: campaignId },
             include: {
                 participants: true,
-                enemies: true,
-                logs: { orderBy: { timestamp: 'desc' }, take: 20 }
+                enemies: { orderBy: { order: 'asc' } },
+                logs: { orderBy: { timestamp: 'desc' }, take: 50 }
             }
         });
 
-        io.to(campaignId).emit('gamestate_update', updatedCampaign);
+        if (updatedCampaign) {
+            io.to(campaignId).emit('gamestate_update', updatedCampaign);
+        }
+
         res.json({
             success: true,
             roll: rawD20,
@@ -180,7 +184,8 @@ export const performAction = async (req: Request, res: Response) => {
             isCrit,
             isMiss,
             strength,
-            modifier: weaponBonus
+            modifier: weaponBonus,
+            campaign: updatedCampaign
         });
 
     } catch (error) {
@@ -225,7 +230,7 @@ export const logWorkout = async (req: Request, res: Response) => {
         });
         io.to(campaignId).emit('gamestate_update', updatedCampaign);
 
-        res.json(participant);
+        res.json({ campaign: updatedCampaign, participant });
     } catch (error) {
         console.error('Workout log error:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -344,7 +349,7 @@ export const undoAction = async (req: Request, res: Response) => {
         });
         io.to(campaignId).emit('gamestate_update', updatedCampaign);
 
-        res.json({ success: true });
+        res.json({ success: true, campaign: updatedCampaign });
     } catch (error) {
         console.error('Undo error:', error);
         res.status(500).json({ error: 'Internal server error' });

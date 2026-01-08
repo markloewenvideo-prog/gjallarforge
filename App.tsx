@@ -267,6 +267,7 @@ export default function App() {
 
       setTimeout(() => {
         if (res.success) {
+          if (res.campaign) setCampaign(res.campaign);
           const isCrit = res.roll === 20;
           const isFumble = res.roll === 1;
           const hit = res.damage > 0;
@@ -322,13 +323,17 @@ export default function App() {
   };
 
   const handleWorkout = async (participantId: string) => {
-    try { await api.logWorkout(campaign.id!, participantId); } catch (e) { console.error(e); }
+    try {
+      const res = await api.logWorkout(campaign.id!, participantId);
+      if (res.campaign) setCampaign(res.campaign);
+    } catch (e) { console.error(e); }
   };
 
   const handleUndo = async (participantId: string) => {
     if (!campaign?.id) return;
     try {
-      await api.undoLastAction(campaign.id, participantId);
+      const res = await api.undoLastAction(campaign.id, participantId);
+      if (res.campaign) setCampaign(res.campaign);
     } catch (e: any) {
       console.error(e);
       alert(e.error || "Failed to undo action.");
@@ -705,8 +710,8 @@ export default function App() {
       )}
 
       {victoryData && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl animate-in zoom-in-95 duration-700">
-          <div className="rpg-card max-w-sm w-full p-0 overflow-hidden shadow-[0_0_100px_rgba(217,197,163,0.1)] border-4 border-[#5c5346] relative">
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl animate-in zoom-in-95 duration-700 overflow-y-auto">
+          <div className="rpg-card max-w-sm w-full p-0 shadow-[0_0_100px_rgba(217,197,163,0.1)] border-4 border-[#5c5346] relative my-auto">
             <button
               onClick={() => setVictoryData(null)}
               className="absolute top-4 right-4 text-xs font-bold opacity-30 hover:opacity-100 uppercase tracking-widest z-50 text-[#fdf6e3]"
@@ -724,7 +729,7 @@ export default function App() {
             </div>
 
             {/* The Decree Content */}
-            <div className="p-6 text-center bg-[#fdf6e3]">
+            <div className="p-5 md:p-6 text-center bg-[#fdf6e3] max-h-[60vh] overflow-y-auto">
               <div className="border-4 border-double border-[#3a352f]/40 p-6 relative">
                 {/* Corner Accents */}
                 <div className="absolute -top-3 -left-3 w-6 h-6 border-t-4 border-l-4 border-[#3a352f]/40"></div>
@@ -807,7 +812,7 @@ export default function App() {
 
       {resolutionData && (
         <div className="fixed inset-0 z-[170] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl animate-in zoom-in-95 duration-500 overflow-y-auto">
-          <div className="rpg-card max-w-xl w-full p-0 overflow-hidden shadow-[0_0_150px_rgba(0,0,0,0.5)] border-4 border-[#3a352f] my-auto">
+          <div className="rpg-card max-w-xl w-full p-0 shadow-[0_0_150px_rgba(0,0,0,0.5)] border-4 border-[#3a352f] my-auto">
             <div className="bg-[#3a352f] text-[#fdf6e3] py-8 text-center relative">
               <div className="text-[10px] font-bold uppercase tracking-[0.5em] opacity-40 mb-2">Weekly Ritual Complete</div>
               <h3 className="text-4xl font-black uppercase tracking-[0.1em] leading-none mb-2 drop-shadow-lg">
@@ -1091,7 +1096,7 @@ export default function App() {
                   const rollColor = isCrit ? 'text-[#8b0000]' : isFumble ? 'text-gray-400 opacity-50 line-through' : 'text-[#3a352f]';
 
                   return (
-                    <div key={log.id} className="grid grid-cols-[80px_1fr_100px_100px] items-center py-3 px-4 border-b border-[#5c5346]/10 hover:bg-black/5 transition-colors">
+                    <div key={log.id} className="grid grid-cols-[60px_1fr_60px_60px] md:grid-cols-[80px_1fr_100px_100px] items-center py-3 px-2 md:px-4 border-b border-[#5c5346]/10 hover:bg-black/5 transition-colors overflow-x-hidden">
                       <div className="pencil-font text-[10px] opacity-40">{timeStr}</div>
                       <div className="flex items-center gap-2">
                         <span className="font-black uppercase tracking-tight text-xs">{content.participantName}</span>
