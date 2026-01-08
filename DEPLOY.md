@@ -11,21 +11,16 @@ We recommend **Render** or **Railway** for hosting the Node.js/Express backend.
 1. **Root Directory**: `server` (CRITICAL: Set this in your Render/Railway settings)
 2. **Dynamic Runtime**: Node.js
 3. **Build Command**: `npm install && npx prisma generate && npm run build`
-4. **Start Command**: `npx prisma db push && npm start`
+4. **Start Command**: `npm start`
 
-### Environment Variables (ON RENDER)
-1. Go to the **Environment** tab in your Render service.
-2. Click **Add Environment Variable**.
+### 🛡️ The Neon.tech "Express Pass" (Recommended)
+If Supabase is giving you "P1001" or "Circuit Breaker" errors, Neon is the easiest fix. It takes 1 minute and just works.
 
-#### ⚔️ The Double Ritual (Fixes P1001)
-You must set **TWO** different URLs from Supabase:
-
-| Key | Value (From Supabase Settings > Database) | Port | Mode |
-| :--- | :--- | :--- | :--- |
-| **`DATABASE_URL`** | The **Transaction** Mode URI (contains `.pooler.`) | **6543** | Transaction |
-| **`DIRECT_URL`** | The **Session** Mode URI (contains `.pooler.`) | **5432** | Session |
-
-3. **SAVE**: Scroll down and click **Save Changes**.
+1. Go to **[Neon.tech](https://neon.tech)** and create a free account.
+2. Create a new project called `GjallarForge`.
+3. Copy the **Connection String** from your dashboard (it starts with `postgresql://`).
+4. **On Render**: Set **`DATABASE_URL`** and **`DIRECT_URL`** to that exact same Neon string.
+5. **SAVE** and redeploy. Neon handles everything else!
 
 ---
 
@@ -86,12 +81,17 @@ If your terminal asks for a password and you use Google sign-in, you must use a 
 ## 5. Troubleshooting: "Commits on the remote" or "Behind" errors
 If Git/GitHub Desktop won't let you push because the remote already has content:
 
-#### ⚔️ The "Migration Reset" Ritual (Fixes Provider Mismatch)
-If you see an error about `sqlite` not matching `postgresql` in your migration files:
-1. **Delete** the folder: `server/prisma/migrations`.
-2. **Commit & Push** this deletion in GitHub Desktop.
-3. On Render, make sure your **Start Command** is set to:
-   `npx prisma db push && npm start`
+### ⚔️ The "Local Migration" Ritual (Recommended)
+If Render struggles to run migrations, do it from your local computer:
+1. **Open your terminal** in the `server` folder.
+2. **Run this command** (Sets both variables to the working port 6543 with your new password):
+   ```bash
+   cd "/Users/msloewen/Downloads/forge-&-fury_-rpg-workout-tracker/server"
+   export DATABASE_URL='postgresql://postgres.mlmbizdpvbdjbpwapckk:w9z0B4kJOHICM76g@aws-0-us-west-2.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require'
+   export DIRECT_URL='postgresql://postgres.mlmbizdpvbdjbpwapckk:w9z0B4kJOHICM76g@aws-0-us-west-2.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require'
+   npx prisma db push
+   ```
+3. Once that says "Database is in sync", Render only needs to run `npm start`.
 
 ### The Overwrite Ritual (Use with Caution)
 This will tell GitHub: "Ignore everything you have, my local computer is the source of truth."

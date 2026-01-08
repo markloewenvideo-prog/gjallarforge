@@ -53,23 +53,29 @@ export const performAction = async (req: Request, res: Response) => {
             return;
         }
 
-        let logEntry;
-        let damage = 0;
-        let isCrit = false;
-        let roll = 0;
+        // --- NEW DAMAGE LOGIC ---
+        // 1. D20 Roll
+        const d20 = Math.floor(Math.random() * 20) + 1;
+        const isFumble = d20 === 1;
+        const isCrit = d20 === 20;
 
-        // Roll d20
-        const rawRoll = Math.floor(Math.random() * 20) + 1;
-        roll = rawRoll;
-        const strengthBonus = participant.level;
-        const totalRoll = rawRoll + strengthBonus;
-        const isFumble = rawRoll === 1;
-        isCrit = rawRoll === 20;
+        // 2. Weapon Roll
+        const weapon = WEAPONS[participant.weaponTier as keyof typeof WEAPONS] || WEAPONS[0];
+        let weaponRoll = 0;
+        for (let i = 0; i < weapon.numDice; i++) {
+            weaponRoll += Math.floor(Math.random() * weapon.sides) + 1;
+        }
 
-        const hit = totalRoll >= currentEnemy.ac || isCrit; // AC check with strength bonus
+        // 3. Strength (Level)
+        const strength = participant.level;
 
-        // 1. Logging Effort (Strike = Workout)
-        // Nat 20 = 2 pips, else 1 pip
+        // 4. Total Damage = D20 + Weapon + Strength
+        // Critical doubles the total
+        let damage = d20 + weaponRoll + strength;
+        if (isCrit) damage *= 2;
+
+        // --- UPDATE WORLD ---
+        // Pips: Nat 20 = 2 pips, else 1 pip
         const pipsToAdd = isCrit ? 2 : 1;
 
         await prisma.participant.update({
@@ -77,92 +83,80 @@ export const performAction = async (req: Request, res: Response) => {
             data: {
                 totalWorkouts: { increment: pipsToAdd },
                 workoutsThisWeek: { increment: pipsToAdd },
-                isLootDisqualified: isFumble ? true : undefined, // Curse on Nat 1
-                bountyScore: { increment: rawRoll },
+                isLootDisqualified: isFumble ? true : undefined,
+                bountyScore: { increment: d20 }, // Loot still follows Raw D20 rolls
                 nat20Count: isCrit ? { increment: 1 } : undefined,
                 isInspired: isCrit ? true : undefined,
                 highestSingleRoll: {
-                    set: Math.max((participant as any).highestSingleRoll, rawRoll)
+                    set: Math.max((participant as any).highestSingleRoll, d20)
                 },
                 bountyScoreUpdatedAt: new Date()
             } as any
         });
 
-        let killed = false;
-        if (hit) {
-            damage = calculateDamage(participant.weaponTier, participant.level);
-            if (isCrit) damage *= 2;
+        // Update Enemy
+        await prisma.enemy.update({
+            where: { id: currentEnemy.id },
+            data: {
+                hp: { decrement: damage }
+            }
+        });
 
-            // Update Enemy
+        const updatedEnemy = await prisma.enemy.findUnique({ where: { id: currentEnemy.id } });
+        let killed = false;
+
+        if (updatedEnemy && updatedEnemy.hp <= 0) {
+            killed = true;
+
+            // Fair Sweat Loot Determination
+            const eligible = await prisma.participant.findMany({
+                where: {
+                    campaignId,
+                    isLootDisqualified: false
+                },
+                orderBy: [
+                    { bountyScore: 'desc' },
+                    { nat20Count: 'desc' },
+                    { highestSingleRoll: 'desc' },
+                    { bountyScoreUpdatedAt: 'asc' }
+                ] as any
+            });
+
+            const winnerId = eligible[0]?.id || participant.id;
+
             await prisma.enemy.update({
                 where: { id: currentEnemy.id },
+                data: { isDead: true, lootWinnerId: winnerId }
+            });
+
+            await prisma.campaign.update({
+                where: { id: campaignId },
+                data: { currentEnemyIndex: { increment: 1 } }
+            });
+
+            await prisma.logEntry.create({
                 data: {
-                    hp: { decrement: damage }
+                    campaignId,
+                    type: 'system',
+                    content: JSON.stringify({ message: `EVENT_VANQUISHED:${currentEnemy.name} has fallen! Victory to the forge!` })
                 }
             });
 
-            // Check death
-            const updatedEnemy = await prisma.enemy.findUnique({ where: { id: currentEnemy.id } });
-            if (updatedEnemy && updatedEnemy.hp <= 0) {
-                killed = true;
-                // Determine Loot Winner based on "Fair Sweat" rule:
-                // 1. bountyScore (Sum of d20 rolls)
-                // 2. nat20Count (Tie-breaker 1)
-                // 3. highestSingleRoll (Tie-breaker 2)
-                // 4. bountyScoreUpdatedAt (Tie-breaker 3 - First to reach)
-                // Must not be cursed (isLootDisqualified)
-                const eligible = await prisma.participant.findMany({
-                    where: {
-                        campaignId,
-                        isLootDisqualified: false
-                    },
-                    orderBy: [
-                        { bountyScore: 'desc' },
-                        { nat20Count: 'desc' },
-                        { highestSingleRoll: 'desc' },
-                        { bountyScoreUpdatedAt: 'asc' }
-                    ] as any
-                });
-
-                const winnerId = eligible[0]?.id || participant.id;
-
-                await prisma.enemy.update({
-                    where: { id: currentEnemy.id },
-                    data: { isDead: true, lootWinnerId: winnerId }
-                });
-
-                // Advance campaign enemy index
-                await prisma.campaign.update({
-                    where: { id: campaignId },
-                    data: {
-                        currentEnemyIndex: { increment: 1 }
-                    }
-                });
-
-                await prisma.logEntry.create({
-                    data: {
-                        campaignId,
-                        type: 'system',
-                        content: JSON.stringify({ message: `EVENT_VANQUISHED:${currentEnemy.name} has fallen! Victory to the forge!` })
-                    }
-                });
-
-                await prisma.logEntry.create({
-                    data: {
-                        campaignId,
-                        type: 'system',
-                        content: JSON.stringify({
-                            message: `EVENT_LOOT_CLAIMED:${eligible[0]?.name || participant.name} claims the loot!`,
-                            winnerName: eligible[0]?.name || participant.name,
-                            tier: currentEnemy.weaponDropTier
-                        })
-                    }
-                });
-            }
+            await prisma.logEntry.create({
+                data: {
+                    campaignId,
+                    type: 'system',
+                    content: JSON.stringify({
+                        message: `EVENT_LOOT_CLAIMED:${eligible[0]?.name || participant.name} claims the loot!`,
+                        winnerName: eligible[0]?.name || participant.name,
+                        tier: currentEnemy.weaponDropTier
+                    })
+                }
+            });
         }
 
         // Log
-        logEntry = await prisma.logEntry.create({
+        const logEntry = await prisma.logEntry.create({
             data: {
                 campaignId,
                 type: 'attack',
@@ -170,10 +164,12 @@ export const performAction = async (req: Request, res: Response) => {
                     participantId,
                     participantName: participant.name,
                     enemyName: currentEnemy.name,
-                    roll,
+                    roll: d20,
                     damage,
                     isCrit,
-                    hit
+                    hit: true, // Always hit now
+                    weaponRoll,
+                    strength
                 })
             }
         });
@@ -190,8 +186,7 @@ export const performAction = async (req: Request, res: Response) => {
         });
 
         io.to(campaignId).emit('gamestate_update', updatedCampaign);
-
-        res.json({ success: true, roll, damage, killed });
+        res.json({ success: true, roll: d20, damage, killed });
 
     } catch (error) {
         console.error('Action error:', error);
@@ -241,3 +236,121 @@ export const logWorkout = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 }
+
+export const undoAction = async (req: Request, res: Response) => {
+    try {
+        const { campaignId, participantId } = req.body;
+
+        if (!campaignId || !participantId) {
+            res.status(400).json({ error: 'Missing parameters' });
+            return;
+        }
+
+        // Find the most recent attack log for this participant in this campaign
+        const lastLog = await prisma.logEntry.findFirst({
+            where: {
+                campaignId,
+                type: 'attack'
+            },
+            orderBy: { timestamp: 'desc' }
+        });
+
+        if (!lastLog) {
+            res.status(404).json({ error: 'No recent actions to undo' });
+            return;
+        }
+
+        const logData = JSON.parse(lastLog.content);
+
+        // Safety check: ensure the last log actually belongs to this participant 
+        if (logData.participantId !== participantId) {
+            res.status(400).json({ error: 'You can only undo your own most recent action' });
+            return;
+        }
+
+        const { roll, damage, isCrit, hit, enemyName } = logData;
+
+        // 1. Revert Participant Stats
+        const pipsToSubtract = isCrit ? 2 : 1;
+        await prisma.participant.update({
+            where: { id: participantId },
+            data: {
+                totalWorkouts: { decrement: pipsToSubtract },
+                workoutsThisWeek: { decrement: pipsToSubtract },
+                bountyScore: { decrement: roll },
+                nat20Count: isCrit ? { decrement: 1 } : undefined,
+            } as any
+        });
+
+        // 2. Revert Enemy HP (if it was a hit)
+        if (hit) {
+            const enemy = await prisma.enemy.findFirst({
+                where: { campaignId, name: enemyName }
+            });
+
+            if (enemy) {
+                let killedReversion = false;
+
+                // If the enemy was dead and this log was the killing blow...
+                if (enemy.isDead && enemy.hp <= 0) {
+                    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+                    if (campaign && campaign.currentEnemyIndex > 0) {
+                        await prisma.campaign.update({
+                            where: { id: campaignId },
+                            data: { currentEnemyIndex: { decrement: 1 } }
+                        });
+                        killedReversion = true;
+                    }
+                }
+
+                await prisma.enemy.update({
+                    where: { id: enemy.id },
+                    data: {
+                        hp: { increment: damage },
+                        isDead: killedReversion ? false : undefined,
+                        lootWinnerId: killedReversion ? null : undefined
+                    }
+                });
+
+                // Delete the "VANQUISHED" and "LOOT" system logs if we reverted a kill
+                if (killedReversion) {
+                    await prisma.logEntry.deleteMany({
+                        where: {
+                            campaignId,
+                            type: 'system',
+                            content: { contains: 'EVENT_VANQUISHED' }
+                        }
+                    });
+                    await prisma.logEntry.deleteMany({
+                        where: {
+                            campaignId,
+                            type: 'system',
+                            content: { contains: 'EVENT_LOOT_CLAIMED' }
+                        }
+                    });
+                }
+            }
+        }
+
+        // 3. Delete the attack log
+        await prisma.logEntry.delete({
+            where: { id: lastLog.id }
+        });
+
+        const io = getIO();
+        const updatedCampaign = await prisma.campaign.findUnique({
+            where: { id: campaignId },
+            include: {
+                participants: true,
+                enemies: true,
+                logs: { orderBy: { timestamp: 'desc' }, take: 20 }
+            }
+        });
+        io.to(campaignId).emit('gamestate_update', updatedCampaign);
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Undo error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};

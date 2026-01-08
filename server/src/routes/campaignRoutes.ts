@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createCampaign, getCampaign, joinCampaign, getDefaultCampaign, getAllCampaigns, deleteCampaign, enlistHero, forgeAhead, retireHero } from '../controllers/campaignController';
-import { performAction, logWorkout } from '../controllers/gameController';
+import { performAction, logWorkout, undoAction } from '../controllers/gameController';
 
 const router = Router();
 
@@ -15,5 +15,6 @@ router.delete('/:id/participant/:participantId', retireHero);
 router.post('/join', joinCampaign);
 router.post('/action', performAction);
 router.post('/workout', logWorkout);
+router.post('/undo', undoAction);
 
 export default router;

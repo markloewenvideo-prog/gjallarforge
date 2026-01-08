@@ -138,5 +138,15 @@ export const api = {
         });
         if (!res.ok) throw await res.json();
         return res.json();
+    },
+
+    undoLastAction: async (campaignId: string, participantId: string) => {
+        const res = await fetch(`${API_URL}/campaigns/undo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ campaignId, participantId })
+        });
+        if (!res.ok) throw await res.json();
+        return res.json();
     }
 };

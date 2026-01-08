@@ -307,6 +307,16 @@ export default function App() {
     try { await api.logWorkout(campaign.id!, participantId); } catch (e) { console.error(e); }
   };
 
+  const handleUndo = async (participantId: string) => {
+    if (!campaign?.id) return;
+    try {
+      await api.undoLastAction(campaign.id, participantId);
+    } catch (e: any) {
+      console.error(e);
+      alert(e.error || "Failed to undo action.");
+    }
+  };
+
   const handleLogout = () => {
     localStorage.clear();
     setCampaign(null);
@@ -836,6 +846,15 @@ export default function App() {
                       <div className="flex items-center gap-2">
                         <span className="font-black uppercase tracking-tight text-xs">{content.participantName}</span>
                         <span className="text-[8px] font-bold uppercase tracking-widest opacity-30">vs {content.enemyName}</span>
+                        {idx === 0 && content.participantId === localStorage.getItem('forge_participant_id') && (
+                          <button
+                            onClick={() => handleUndo(content.participantId)}
+                            className="ml-auto text-[8px] font-bold uppercase tracking-widest text-[#8b0000] opacity-40 hover:opacity-100 hover:underline transition-all"
+                            title="Undo this action"
+                          >
+                            ⌫ Undo
+                          </button>
+                        )}
                       </div>
                       <div className={`pencil-font text-lg text-center ${rollColor}`}>
                         {content.roll}
@@ -948,7 +967,8 @@ export default function App() {
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="text-2xl font-black tracking-tighter leading-none">{p.name}</h3>
-                      <div className="text-[10px] font-bold uppercase opacity-40 mt-1 tracking-wider">Level {p.level} • {p.totalWorkouts} Total Deeds</div>
+                      <div className="text-[10px] font-bold uppercase text-[#8b0000] tracking-widest mt-0.5">{getLevelTitle(p.level)}</div>
+                      <div className="text-[9px] font-bold uppercase opacity-40 mt-1 tracking-wider">Level {p.level} • {p.totalWorkouts} Total Deeds</div>
                     </div>
                     <div className="strength-box text-center bg-white/30 border border-[#5c5346]/10">
                       <div className="text-[8px] font-bold uppercase tracking-widest opacity-60">Strength</div>

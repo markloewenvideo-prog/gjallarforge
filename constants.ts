@@ -2,11 +2,12 @@
 import { Weapon, WeaponTier } from './types';
 
 export const WEAPONS: Record<WeaponTier, Weapon> = {
-  0: { tier: 0, name: "Rusty Dagger", dice: "1d4", numDice: 1, sides: 4 },
-  1: { tier: 1, name: "Broadsword", dice: "2d4", numDice: 2, sides: 4 },
-  2: { tier: 2, name: "War Hammer", dice: "3d8", numDice: 3, sides: 8 },
-  3: { tier: 3, name: "Great Axe", dice: "4d12", numDice: 4, sides: 12 },
-  4: { tier: 4, name: "Legendary Dragonbane", dice: "10d10", numDice: 10, sides: 10 },
+  0: { tier: 0, name: "Unarmed Strike", dice: "0d0", numDice: 0, sides: 0 },
+  1: { tier: 1, name: "Rusty Dagger", dice: "1d4", numDice: 1, sides: 4 },
+  2: { tier: 2, name: "Broadsword", dice: "2d4", numDice: 2, sides: 4 },
+  3: { tier: 3, name: "War Hammer", dice: "3d8", numDice: 3, sides: 8 },
+  4: { tier: 4, name: "Great Axe", dice: "4d12", numDice: 4, sides: 12 },
+  5: { tier: 5, name: "Legendary Dragonbane", dice: "10d10", numDice: 10, sides: 10 },
 };
 
 export const DICE_COLORS = {
