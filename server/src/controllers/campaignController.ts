@@ -30,157 +30,171 @@ export const createCampaign = async (req: Request, res: Response) => {
 
         console.log("[DEBUG] Starting createCampaign for:", name);
 
-        // 1. Local Enemy Generation (Instant)
-        console.log("[DEBUG] Generating enemies locally...");
-        const totalWeeks = Math.max(1, Number(config.totalWeeks || config.weeks || 4));
-        const workoutsPerWeek = Number(config.workoutsPerWeek || 3);
+        // 1. Local Enemy Generation
+        console.log("[DEBUG] Step 1: Generating enemies...");
+        let generatedMonsterData: any[];
+        try {
+            const totalWeeks = Math.max(1, Number(config.totalWeeks || config.weeks || 4));
+            const workoutsPerWeek = Number(config.workoutsPerWeek || 3);
 
-        const generatedMonsterData = Array.from({ length: totalWeeks }, (_, i) => {
-            const progress = i / Math.max(1, totalWeeks - 1);
-            const isFinalBoss = i === totalWeeks - 1;
-            let tier: string;
-
-            if (isFinalBoss) {
-                tier = 'T6';
-            } else {
-                if (progress < 0.2) tier = 'T1';
-                else if (progress < 0.4) tier = 'T2';
-                else if (progress < 0.6) tier = 'T3';
-                else if (progress < 0.8) tier = 'T4';
-                else tier = 'T5';
-            }
-
-            const pool = MONSTER_TIERS[tier];
-            const useFunny = Math.random() > 0.5;
-            const subPool = useFunny ? pool.funny : pool.regular;
-
-            const baseMonster = subPool[Math.floor(Math.random() * subPool.length)];
-
-            // Override for the first monster if provided
-            if (i === 0 && initialEnemy) {
-                let finalName = initialEnemy.name || baseMonster.name;
+            generatedMonsterData = Array.from({ length: totalWeeks }, (_, i) => {
+                const progress = i / Math.max(1, totalWeeks - 1);
                 const isFinalBoss = i === totalWeeks - 1;
+                let tier: string;
 
-                if (isFinalBoss && !finalName.startsWith("The Shadow of")) {
-                    finalName = `The Shadow of ${finalName}`;
+                if (isFinalBoss) {
+                    tier = 'T6';
+                } else {
+                    if (progress < 0.2) tier = 'T1';
+                    else if (progress < 0.4) tier = 'T2';
+                    else if (progress < 0.6) tier = 'T3';
+                    else if (progress < 0.8) tier = 'T4';
+                    else tier = 'T5';
                 }
 
-                return {
-                    ...baseMonster,
-                    name: finalName,
-                    description: initialEnemy.description || baseMonster.description
-                };
-            }
+                const pool = MONSTER_TIERS[tier];
+                const useFunny = Math.random() > 0.5;
+                const subPool = useFunny ? pool.funny : pool.regular;
 
-            return baseMonster;
-        });
-        console.log("[DEBUG] Generation complete. Count:", generatedMonsterData.length);
+                const baseMonster = subPool[Math.floor(Math.random() * subPool.length)];
+
+                // Override for the first monster if provided
+                if (i === 0 && initialEnemy && typeof initialEnemy === 'object') {
+                    let finalName = initialEnemy.name || baseMonster.name;
+                    const isFinalBoss = i === totalWeeks - 1;
+
+                    if (isFinalBoss && !finalName.startsWith("The Shadow of")) {
+                        finalName = `The Shadow of ${finalName}`;
+                    }
+
+                    return {
+                        ...baseMonster,
+                        name: finalName,
+                        description: initialEnemy.description || baseMonster.description
+                    };
+                }
+
+                return baseMonster;
+            });
+            console.log("[DEBUG] Generation complete. Count:", generatedMonsterData.length);
+        } catch (e: any) {
+            console.error("[DEBUG] Step 1 Failed:", e);
+            throw new Error(`Enemy Generation Failed: ${e.message}`);
+        }
 
         // 2. Prepare Participants
+        console.log("[DEBUG] Step 2: Preparing participants...");
         const participantsData = [];
-        for (const pName of participantsNames) {
-            const cleanName = pName.trim();
-            if (!cleanName) continue;
+        try {
+            for (const pName of participantsNames) {
+                const cleanName = pName.trim();
+                if (!cleanName) continue;
 
-            let user = await prisma.user.findUnique({ where: { username: cleanName } });
-            if (!user) {
-                const passwordHash = await bcrypt.hash('password123', 10);
-                user = await prisma.user.create({
-                    data: { username: cleanName, passwordHash }
+                let user = await prisma.user.findUnique({ where: { username: cleanName } });
+                if (!user) {
+                    const passwordHash = await bcrypt.hash('password123', 10);
+                    user = await prisma.user.create({
+                        data: { username: cleanName, passwordHash }
+                    });
+                }
+                participantsData.push({
+                    name: cleanName,
+                    userId: user.id
                 });
             }
-            participantsData.push({
-                name: cleanName,
-                userId: user.id
-            });
+            console.log("[DEBUG] Participants ready:", participantsData.length);
+        } catch (e: any) {
+            console.error("[DEBUG] Step 2 Failed:", e);
+            throw new Error(`Hero Selection Failed: ${e.message}`);
         }
 
         // 3. Create Campaign and related entities
-        const campaign = await prisma.campaign.create({
-            data: {
-                name,
-                config: JSON.stringify({ ...config, totalWeeks, workoutsPerWeek }),
-                currentWeek: 1,
-                participants: {
-                    create: participantsData.map(p => ({
-                        name: p.name,
-                        userId: p.userId,
-                        level: 1,
-                        weaponTier: 0
-                    }))
+        console.log("[DEBUG] Step 3: Executing Database Transaction...");
+        try {
+            const workoutsPerWeek = Number(config.workoutsPerWeek || 3);
+            const totalWeeks = Math.max(1, Number(config.totalWeeks || config.weeks || 4));
+
+            const campaign = await prisma.campaign.create({
+                data: {
+                    name,
+                    config: JSON.stringify({ ...config, totalWeeks, workoutsPerWeek }),
+                    currentWeek: 1,
+                    participants: {
+                        create: participantsData.map(p => ({
+                            name: p.name,
+                            userId: p.userId,
+                            level: 1,
+                            weaponTier: 0
+                        }))
+                    },
+                    enemies: {
+                        create: generatedMonsterData.map((data: any, i: number) => {
+                            const dropTier = getWeaponDropTier(i, totalWeeks);
+                            const avgDmg = calculateAvgWeaponDamage(dropTier);
+                            const expectedLevel = 1 + i;
+                            const totalCampaignWorkouts = participantsData.length * workoutsPerWeek * totalWeeks;
+
+                            const isBoss = i === totalWeeks - 1;
+                            const budgetPercentage = isBoss ? 0.40 : (0.60 / Math.max(1, totalWeeks - 1));
+                            const budgetedWorkoutsForThisEnemy = totalCampaignWorkouts * budgetPercentage;
+
+                            const currentWeaponBonus = i === 0 ? 0 : calculateAvgWeaponDamage(getWeaponDropTier(i - 1, totalWeeks));
+                            const avgDamagePerHit = 10.5 + expectedLevel + currentWeaponBonus;
+
+                            const toughness = isBoss ? 1.5 : 1.0;
+                            const hp = Math.ceil(budgetedWorkoutsForThisEnemy * avgDamagePerHit * toughness);
+
+                            const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
+                            const finalDescription = (i === 0 && initialEnemy) ? data.description : `${data.description} Beware its ${spell}!`;
+
+                            return {
+                                name: data.name,
+                                description: finalDescription,
+                                hp: Math.max(10, hp),
+                                maxHp: Math.max(10, hp),
+                                ac: 10,
+                                weaponDropTier: dropTier,
+                                order: i,
+                                isDead: false
+                            };
+                        })
+                    },
+                    logs: {
+                        create: [
+                            {
+                                type: 'system',
+                                content: JSON.stringify({ message: `The Forge is lit for ${name}. The journey begins.` })
+                            },
+                            ...(generatedMonsterData.length > 0 ? [{
+                                type: 'system',
+                                content: JSON.stringify({
+                                    message: `EVENT_ENEMYNAMED:${generatedMonsterData[0].name}`,
+                                    enemyName: generatedMonsterData[0].name,
+                                    description: generatedMonsterData[0].description
+                                })
+                            }] : [])
+                        ]
+                    }
                 },
-                enemies: {
-                    create: generatedMonsterData.map((data: any, i: number) => {
-                        const dropTier = getWeaponDropTier(i, totalWeeks);
-                        const avgDmg = calculateAvgWeaponDamage(dropTier);
-
-                        // Expected Level for this week
-                        const expectedLevel = 1 + i;
-
-                        // Total workouts for the whole campaign:
-                        const totalCampaignWorkouts = participantsData.length * workoutsPerWeek * totalWeeks;
-
-                        // Boss takes a huge chunk (40%), others split the remaining 60%
-                        const isBoss = i === totalWeeks - 1;
-                        const budgetPercentage = isBoss ? 0.40 : (0.60 / Math.max(1, totalWeeks - 1));
-
-                        const budgetedWorkoutsForThisEnemy = totalCampaignWorkouts * budgetPercentage;
-
-                        // HP Calibration for "The Iron Path" (Simplified)
-                        // Player level increases each week.
-                        // Player weapon is from the previous enemy's drop tier.
-                        const currentWeaponBonus = i === 0 ? 0 : calculateAvgWeaponDamage(getWeaponDropTier(i - 1, totalWeeks));
-                        const avgDamagePerHit = 10.5 + expectedLevel + currentWeaponBonus;
-
-                        // HP = anticipated_workouts * avgDamage * toughness_multiplier
-                        // Toughness 1.5 means the boss is a multi-session effort.
-                        const toughness = isBoss ? 1.5 : 1.0;
-                        const hp = Math.ceil(budgetedWorkoutsForThisEnemy * avgDamagePerHit * toughness);
-
-                        const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
-                        // If it was custom provided, don't append the spell/random stuff
-                        const finalDescription = (i === 0 && initialEnemy) ? data.description : `${data.description} Beware its ${spell}!`;
-
-                        return {
-                            name: data.name,
-                            description: finalDescription,
-                            hp: Math.max(10, hp),
-                            maxHp: Math.max(10, hp),
-                            ac: 10,
-                            weaponDropTier: dropTier,
-                            order: i,
-                            isDead: false
-                        };
-                    })
-                },
-                logs: {
-                    create: [
-                        {
-                            type: 'system',
-                            content: JSON.stringify({ message: `The Forge is lit for ${name}. The journey begins.` })
-                        },
-                        ...(generatedMonsterData.length > 0 ? [{
-                            type: 'system',
-                            content: JSON.stringify({
-                                message: `EVENT_ENEMYNAMED:${generatedMonsterData[0].name}`,
-                                enemyName: generatedMonsterData[0].name,
-                                description: generatedMonsterData[0].description
-                            })
-                        }] : [])
-                    ]
+                include: {
+                    participants: true,
+                    enemies: true,
+                    logs: true
                 }
-            },
-            include: {
-                participants: true,
-                enemies: true,
-                logs: true
-            }
-        });
+            });
 
-        res.json(campaign);
-    } catch (error) {
+            console.log("[DEBUG] Campaign Created Successfully:", campaign.id);
+            res.json(campaign);
+        } catch (e: any) {
+            console.error("[DEBUG] Step 3 Failed:", e);
+            throw new Error(`Database Transaction Failed: ${e.message}`);
+        }
+    } catch (error: any) {
         console.error('Campaign creation error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({
+            error: 'Ritual failed. The Forge rejected your request.',
+            details: error.message || String(error)
+        });
     }
 };
 

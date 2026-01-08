@@ -215,7 +215,9 @@ export default function App() {
       setView('game');
     } catch (err: any) {
       console.error("Create failed", err);
-      setError(err.error || err.message || "Failed to forge quest. Check console.");
+      const msg = err.error || err.message || "Failed to forge quest.";
+      const details = err.details ? ` (${err.details})` : "";
+      setError(`${msg}${details}`);
     } finally {
       setLoading(false);
     }
