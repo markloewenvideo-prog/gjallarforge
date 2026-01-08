@@ -32,17 +32,17 @@ export const createCampaign = async (req: Request, res: Response) => {
 
         // 1. Local Enemy Generation (Instant)
         console.log("[DEBUG] Generating enemies locally...");
-        const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
+        const totalWeeks = Math.max(1, Number(config.totalWeeks || config.weeks || 4));
         const workoutsPerWeek = Number(config.workoutsPerWeek || 3);
 
         const generatedMonsterData = Array.from({ length: totalWeeks }, (_, i) => {
+            const progress = i / Math.max(1, totalWeeks - 1);
             const isFinalBoss = i === totalWeeks - 1;
             let tier: string;
 
             if (isFinalBoss) {
                 tier = 'T6';
             } else {
-                const progress = i / Math.max(1, totalWeeks - 1);
                 if (progress < 0.2) tier = 'T1';
                 else if (progress < 0.4) tier = 'T2';
                 else if (progress < 0.6) tier = 'T3';
@@ -159,14 +159,14 @@ export const createCampaign = async (req: Request, res: Response) => {
                             type: 'system',
                             content: JSON.stringify({ message: `The Forge is lit for ${name}. The journey begins.` })
                         },
-                        {
+                        ...(generatedMonsterData.length > 0 ? [{
                             type: 'system',
                             content: JSON.stringify({
                                 message: `EVENT_ENEMYNAMED:${generatedMonsterData[0].name}`,
                                 enemyName: generatedMonsterData[0].name,
                                 description: generatedMonsterData[0].description
                             })
-                        }
+                        }] : [])
                     ]
                 }
             },
