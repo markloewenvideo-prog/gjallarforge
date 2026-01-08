@@ -51,14 +51,25 @@ We recommend **Supabase** for your database.
 
 ## 4. Troubleshooting: "Root directory 'server' does not exist"
 If Render gives this error, your `server` folder isn't on GitHub yet.
-1. Open your terminal in the main project folder.
-2. Run:
+
+### Option A: GitHub Desktop (Recommended for Google Sign-in)
+If you use Google to sign in and don't know your password:
+1. Download **GitHub Desktop**.
+2. Sign in via your browser (supports Google/SSO).
+3. "Add" your local project folder.
+4. It will automatically detect the missing `server` files.
+5. Click **Commit** and then **Push**. It handles the "100 file limit" and authentication for you!
+
+### Option B: Terminal Ritual (Requires PAT or CLI)
+If your terminal asks for a password and you use Google sign-in, you must use a **Personal Access Token (PAT)** or the GitHub CLI:
+1. Install GitHub CLI: `brew install gh`
+2. Login: `gh auth login` (select GitHub.com > HTTPS > Login with a web browser).
+3. Once logged in, run:
    ```bash
-   git add server
-   git commit -m "Pushing the forge core"
-   git push
+   git add .
+   git commit -m "The Forge is complete: Full local sync"
+   git push origin main
    ```
-3. Once the folder appears on GitHub, Render will be able to find it!
 
 ---
 
