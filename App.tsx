@@ -38,7 +38,7 @@ const KragCommandments: React.FC<{ onClose?: () => void; noMargin?: boolean }> =
       )}
       <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest mb-8 border-b-2 border-[#5c5346] pb-2 text-center">Krag’s Commandments</h2>
       <ul className="space-y-4 text-sm md:text-base italic font-medium leading-relaxed opacity-90 max-w-xl mx-auto">
-        <li className="flex gap-4"><span>📜</span> "Every drop of sweat counts. Every workout always strikes the foe, unless the fates (d20) fumble."</li>
+        <li className="flex gap-4"><span>📜</span> "The Forge only responds to physical sweat. Every real-world workout always strikes the foe, unless the fates (d20) fumble."</li>
         <li className="flex gap-4"><span>📜</span> "Damage is a simple sum of your effort: Roll d20 + Your Strength (Level) + Weapon Modifier."</li>
         <li className="flex gap-4 text-[#8b0000] font-black"><span>📜</span> "A Natural 20 is an INSTANT KILL! The foe falls immediately, and you earn an extra Pip!"</li>
         <li className="flex gap-4 opacity-50"><span>📜</span> "A Natural 1 is a Total Miss. You deal 0 damage this strike."</li>
@@ -502,8 +502,12 @@ export default function App() {
             <div className="h-px bg-[#5c5346]/20 flex-1"></div>
           </div>
 
-          <div className="grid gap-4 max-h-[40vh] overflow-y-auto mb-8 pr-2">
-            {loading && <div className="opacity-50 text-xs italic tracking-widest uppercase py-10">Scouting the realm...</div>}
+          <div className="grid gap-4 max-h-[40vh] overflow-y-auto mb-8 pr-2 relative min-h-[100px]">
+            {loading && (
+              <div className="absolute inset-0 bg-[#fdf6e3]/60 backdrop-blur-[1px] z-50 flex items-center justify-center animate-in fade-in duration-300">
+                <div className="text-[10px] font-black uppercase tracking-[0.5em] opacity-60 animate-pulse">Scouting the realm...</div>
+              </div>
+            )}
             {campaignsList.map((c: any) => (
               <div key={c.id} className="relative group">
                 <button
@@ -596,13 +600,16 @@ export default function App() {
                 onChange={e => setCreateForm({ ...createForm, participantsText: e.target.value })}
                 placeholder="Krag, DM, Velkyn..."
               />
-              <p className="text-[9px] opacity-40 uppercase tracking-widest mt-2">The fellowship will be bound to this quest immediately.</p>
+              <p className="text-[9px] opacity-40 uppercase tracking-widest mt-2">The fellowship will be bound to this quest immediately. Each "Strike" represents a real-world workout.</p>
             </div>
 
             <div className="space-y-6 pt-6 border-t border-[#5c5346]/10">
               <div className="text-center">
                 <div className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-1">Ritual of the First Shadow</div>
                 <h4 className="text-xl font-black uppercase tracking-tight">The Primordial Foe</h4>
+                <p className="text-[10px] opacity-50 uppercase tracking-widest mt-2 max-w-sm mx-auto leading-relaxed">
+                  Every great journey begins with a challenge. Be creative—this is the first shared enemy the entire fellowship will face together.
+                </p>
               </div>
 
               <div className="space-y-4">
@@ -1007,7 +1014,7 @@ export default function App() {
             </section>
 
             <section className="max-w-2xl mx-auto mb-12">
-              <div className="text-center italic opacity-40 text-[10px] uppercase tracking-widest mb-4">Strike while the iron is hot</div>
+              <div className="text-center italic opacity-40 text-[10px] uppercase tracking-[0.2em] mb-4">The Forge only responds to physical sweat. Strike while the iron is hot.</div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                 {[...(participants || [])].sort((a, b) => a.id.localeCompare(b.id)).map((p: any) => {
                   return (
