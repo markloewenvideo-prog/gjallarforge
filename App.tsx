@@ -366,25 +366,35 @@ export default function App() {
     setView('landing');
   };
 
-  const handleDeleteCampaign = async () => {
-    if (!campaign?.id) return;
+  const handleDeleteCampaign = async (id?: string) => {
+    const targetId = id || campaign?.id;
+    if (!targetId) return;
+
+    if (!window.confirm("Are you sure you wish to delete this quest? All progress will be lost forever.")) return;
+
     try {
-      const resp = await api.deleteCampaign(campaign.id);
+      const resp = await api.deleteCampaign(targetId);
       if (resp.success) {
-        localStorage.clear();
-        // Close modal and clear campaign state first
-        setShowAbandonModal(false);
-        setCampaign(null);
-        // Reset creation form
-        setCreateForm({
-          name: "",
-          weeks: 4,
-          workoutsPerWeek: 3,
-          participantsText: ""
-        });
-        // Switch view last to ensure clean transition
-        setView('create');
-        api.getAllCampaigns().then(list => setCampaignsList(list));
+        if (targetId === campaign?.id) {
+          localStorage.removeItem('forge_campaign_id');
+          localStorage.removeItem('forge_participant_id');
+          setCampaign(null);
+        }
+
+        // Refresh the list if we're on the landing page
+        if (view === 'landing') {
+          const list = await api.getAllCampaigns();
+          setCampaignsList(list);
+          if (list.length === 0) setView('create');
+        } else {
+          // If we were inside the campaign we just deleted
+          setShowAbandonModal(false);
+          setView('landing');
+          api.getAllCampaigns().then(list => {
+            setCampaignsList(list);
+            if (list.length === 0) setView('create');
+          });
+        }
       }
     } catch (e) {
       console.error("Delete failed", e);
@@ -472,14 +482,25 @@ export default function App() {
           <div className="grid gap-4 max-h-[40vh] overflow-y-auto mb-8 pr-2">
             {loading && <div className="opacity-50 text-xs italic tracking-widest uppercase py-10">Scouting the realm...</div>}
             {campaignsList.map((c: any) => (
-              <button
-                key={c.id}
-                onClick={() => handleSelectCampaign(c.id)}
-                className="flex flex-col items-center py-5 button-ink transition-all border border-[#3a352f]"
-              >
-                <span className="text-lg font-bold uppercase tracking-[0.2em]">{c.name}</span>
-                <span className="text-[8px] font-bold uppercase tracking-[0.3em] opacity-40 mt-1">{c._count?.participants || 0} Heroes Active</span>
-              </button>
+              <div key={c.id} className="relative group">
+                <button
+                  onClick={() => handleSelectCampaign(c.id)}
+                  className="w-full flex flex-col items-center py-5 button-ink transition-all border border-[#3a352f]"
+                >
+                  <span className="text-lg font-bold uppercase tracking-[0.2em]">{c.name}</span>
+                  <span className="text-[8px] font-bold uppercase tracking-[0.3em] opacity-40 mt-1">{c._count?.participants || 0} Heroes Active</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteCampaign(c.id);
+                  }}
+                  className="absolute top-2 right-2 p-2 text-[#8b0000] opacity-20 hover:opacity-100 transition-opacity text-xl font-bold"
+                  aria-label="Delete Campaign"
+                >
+                  ×
+                </button>
+              </div>
             ))}
           </div>
 
