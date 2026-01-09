@@ -205,14 +205,14 @@ export const performAction = async (req: Request, res: Response) => {
 
             const config = JSON.parse(campaign.config);
             const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
-            const threshold = totalWeeks - 1;
+            const totalEnemies = config.totalEnemies || totalWeeks;
+            const threshold = totalEnemies - 1;
 
             if (currentEnemy.order < threshold && (campaign.currentEnemyIndex + 1) >= threshold) {
                 // --- APPLY BLESSED STATUS ---
                 const participants = await prisma.participant.findMany({ where: { campaignId } });
                 const workoutsPerWeek = Number(config.workoutsPerWeek || 3);
-                const weekThreshold = threshold; // e.g. entering week 4, threshold is 3
-                const totalPossible = workoutsPerWeek * weekThreshold;
+                const totalPossible = workoutsPerWeek * (totalWeeks - 1);
 
                 for (const p of participants) {
                     if (p.totalWorkouts >= totalPossible) {
