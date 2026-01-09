@@ -102,8 +102,9 @@ export const createCampaign = async (req: Request, res: Response) => {
                 pool = MONSTER_TIERS.HARD;
             }
 
-            const monster = (Math.random() > 0.5 ? pool.funny : pool.regular)[Math.floor(Math.random() * pool.regular.length)];
-            let resultMonster = { ...monster, type: isFinalBoss ? 'BOSS' : 'REGULAR' };
+            const subPool = Math.random() > 0.5 ? pool.funny : pool.regular;
+            const monster = subPool[Math.floor(Math.random() * subPool.length)];
+            let resultMonster = { ...monster };
 
             // Apply custom naming for week 0 if it was the first monster (now index 0)
             if (i === 0 && initialEnemy?.name) {
