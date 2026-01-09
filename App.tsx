@@ -360,6 +360,14 @@ export default function App() {
     }
   };
 
+  const handleExitCampaign = () => {
+    localStorage.removeItem('forge_campaign_id');
+    localStorage.removeItem('forge_participant_id');
+    setCampaign(null);
+    setView('landing');
+    api.getAllCampaigns().then(list => setCampaignsList(list));
+  };
+
   const handleLogout = () => {
     localStorage.clear();
     setCampaign(null);
@@ -375,6 +383,9 @@ export default function App() {
     try {
       const resp = await api.deleteCampaign(targetId);
       if (resp.success) {
+        // Close modal first to avoid zombie state
+        setShowAbandonModal(false);
+
         // If we deleted the campaign that is currently stored, clear it
         if (targetId === localStorage.getItem('forge_campaign_id')) {
           localStorage.removeItem('forge_campaign_id');
@@ -393,7 +404,6 @@ export default function App() {
           setView('create');
         } else if (view === 'game' && targetId === campaign?.id) {
           // If we were inside the campaign we just deleted, and others remain, go to landing
-          setShowAbandonModal(false);
           setView('landing');
         }
       }
@@ -640,10 +650,7 @@ export default function App() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => {
-              setView('landing');
-              api.getAllCampaigns().then(list => setCampaignsList(list));
-            }}
+            onClick={handleExitCampaign}
             className="px-4 py-2 button-hollow text-[10px]"
           >
             Switch Quest
@@ -976,7 +983,7 @@ export default function App() {
                   </div>
 
                   <div className="flex flex-col gap-4 max-w-md mx-auto">
-                    <button onClick={() => setView('landing')} className="w-full py-5 button-ink text-sm font-black uppercase tracking-widest">Return to Titles</button>
+                    <button onClick={handleExitCampaign} className="w-full py-5 button-ink text-sm font-black uppercase tracking-widest">Return to Titles</button>
                     <button onClick={() => setShowAbandonModal(true)} className="w-full py-3 button-red-hollow text-[10px]">Ash the Progress (Start Anew)</button>
                   </div>
                 </div>
