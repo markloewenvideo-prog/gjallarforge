@@ -141,23 +141,34 @@ export default function App() {
       try {
         // If we have a stored ID, try to load it
         if (storedCamId) {
-          const c = await api.getCampaign(storedCamId);
-          setCampaign(c);
-          setView('game');
+          try {
+            const c = await api.getCampaign(storedCamId);
+            setCampaign(c);
+            setView('game');
+          } catch (e) {
+            console.error("Failed to load stored campaign, fallback to list");
+            localStorage.removeItem('forge_campaign_id');
+            const list = await api.getAllCampaigns();
+            setCampaignsList(list);
+            setView('landing');
+          }
         } else {
           // If no stored ID, see if any campaigns exist in the realm
           const list = await api.getAllCampaigns();
           setCampaignsList(list);
 
-          if (list.length > 0) {
-            // Found a quest! Join the first one immediately
+          if (list.length === 0) {
+            // Realm is empty, need to forge a new one
+            setView('create');
+          } else if (list.length === 1) {
+            // Only one campaign exists, join it immediately
             const first = await api.getCampaign(list[0].id);
             setCampaign(first);
             localStorage.setItem('forge_campaign_id', first.id);
             setView('game');
           } else {
-            // Realm is empty, need to forge a new one
-            setView('create');
+            // Multiple campaigns exist, let user choose
+            setView('landing');
           }
         }
       } catch (e) {
@@ -175,10 +186,26 @@ export default function App() {
   // Socket Connection
   useEffect(() => {
     if (campaign?.id) {
+      const handleConnect = () => {
+        console.log("[SOCKET] Connected, joining room:", campaign.id);
+        socket.emit('joinCampaign', campaign.id);
+      };
+
       socket.connect();
-      socket.emit('joinCampaign', campaign.id);
-      socket.on('gamestate_update', setCampaign);
+
+      // Handle initial connection if already connected or when it connects
+      if (socket.connected) {
+        handleConnect();
+      }
+
+      socket.on('connect', handleConnect);
+      socket.on('gamestate_update', (updatedCampaign) => {
+        console.log("[SOCKET] Received gamestate_update");
+        setCampaign(updatedCampaign);
+      });
+
       return () => {
+        socket.off('connect', handleConnect);
         socket.off('gamestate_update');
         socket.disconnect();
       };
