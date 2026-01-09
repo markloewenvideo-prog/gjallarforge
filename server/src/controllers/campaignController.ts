@@ -245,7 +245,7 @@ export const getCampaign = async (req: Request, res: Response) => {
         const campaign = await prisma.campaign.findUnique({
             where: { id },
             include: {
-                participants: true,
+                participants: { orderBy: { id: 'asc' } },
                 enemies: {
                     orderBy: { order: 'asc' }
                 },
@@ -274,7 +274,11 @@ export const getDefaultCampaign = async (req: Request, res: Response) => {
     try {
         // Just return the first one or error
         const campaign = await prisma.campaign.findFirst({
-            include: { participants: true, enemies: { orderBy: { order: 'asc' } }, logs: { orderBy: { timestamp: 'desc' }, take: 50 } }
+            include: {
+                participants: { orderBy: { id: 'asc' } },
+                enemies: { orderBy: { order: 'asc' } },
+                logs: { orderBy: { timestamp: 'desc' }, take: 50 }
+            }
         });
         if (!campaign) return res.status(404).json({ error: "No campaigns exist. Forge one!" });
         res.json(campaign);
@@ -386,7 +390,10 @@ export const forgeAhead = async (req: Request, res: Response) => {
 
         const campaign = await prisma.campaign.findUnique({
             where: { id },
-            include: { participants: true, logs: { orderBy: { timestamp: 'desc' }, take: 10 } }
+            include: {
+                participants: { orderBy: { id: 'asc' } },
+                logs: { orderBy: { timestamp: 'desc' }, take: 10 }
+            }
         });
 
         if (!campaign) return res.status(404).json({ error: "Campaign not found" });
@@ -568,7 +575,11 @@ export const forgeAhead = async (req: Request, res: Response) => {
 
         const updatedCampaign = await prisma.campaign.findUnique({
             where: { id },
-            include: { participants: true, enemies: true, logs: { orderBy: { timestamp: 'desc' }, take: 50 } }
+            include: {
+                participants: { orderBy: { id: 'asc' } },
+                enemies: true,
+                logs: { orderBy: { timestamp: 'desc' }, take: 50 }
+            }
         });
 
         res.json({ campaign: updatedCampaign, summary });

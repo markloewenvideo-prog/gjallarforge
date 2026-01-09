@@ -473,9 +473,9 @@ export default function App() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="rpg-card p-10 max-w-xl w-full text-center shadow-2xl relative">
-          <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight mb-2">📯 The Gjallar Forge</h1>
+          <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight mb-2">📯 Select Your Quest</h1>
           <div className="flex items-center gap-3 mb-10 w-48 mx-auto">
-            <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">+1 to Strength</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">Choose Wisely</span>
             <div className="h-px bg-[#5c5346]/20 flex-1"></div>
           </div>
 
@@ -631,13 +631,22 @@ export default function App() {
     <div className="max-w-6xl mx-auto px-4 py-6 md:py-10 relative">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-4 pb-2">
         <div className="w-full md:w-auto">
-          <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tight leading-none">📯 The Gjallar Forge</h1>
+          <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tight leading-none">📯 {campaign.name}</h1>
           <div className="flex items-center gap-3 mt-1">
             <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-40 text-pencil-color">+1 to Strength</span>
             <div className="h-px bg-[#5c5346]/20 flex-1 min-w-[50px]"></div>
           </div>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setView('landing');
+              api.getAllCampaigns().then(list => setCampaignsList(list));
+            }}
+            className="px-4 py-2 button-hollow text-[10px]"
+          >
+            Switch Quest
+          </button>
           <button onClick={() => setShowRules(true)} className="px-4 py-2 button-hollow text-[10px]">Laws</button>
           <button onClick={() => setShowAbandonModal(true)} className="px-4 py-2 button-red-hollow text-[10px]">Abandon</button>
         </div>
@@ -872,7 +881,7 @@ export default function App() {
                   <section>
                     <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-4 border-b border-[#5c5346]/10 pb-2">Fellowship Status</h4>
                     <div className="space-y-4">
-                      {resolutionData.participants.map((p: any, idx: number) => (
+                      {[...(resolutionData.participants || [])].sort((a, b) => (a.id || "").localeCompare(b.id || "")).map((p: any, idx: number) => (
                         <div key={idx} className="flex justify-between items-center bg-white/40 p-3 rounded border border-[#5c5346]/5">
                           <div className="flex flex-col">
                             <span className="text-lg font-black uppercase tracking-tight leading-none">{p.name}</span>
@@ -980,7 +989,7 @@ export default function App() {
             <section className="max-w-2xl mx-auto mb-12">
               <div className="text-center italic opacity-40 text-[10px] uppercase tracking-widest mb-4">Strike while the iron is hot</div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                {participants.map((p: any) => {
+                {[...(participants || [])].sort((a, b) => a.id.localeCompare(b.id)).map((p: any) => {
                   return (
                     <div key={p.id} className="flex flex-col items-center relative group">
                       {p.isLootDisqualified && (
@@ -1249,7 +1258,7 @@ export default function App() {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {participants.map((p: any) => {
+              {[...(participants || [])].sort((a, b) => a.id.localeCompare(b.id)).map((p: any) => {
                 const weapon = WEAPONS[p.weaponTier as WeaponTier] || WEAPONS[0];
                 return (
                   <div key={p.id} className="rpg-card p-6 shadow-sm relative group">

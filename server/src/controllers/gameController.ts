@@ -166,7 +166,7 @@ export const performAction = async (req: Request, res: Response) => {
         const updatedCampaign = await prisma.campaign.findUnique({
             where: { id: campaignId },
             include: {
-                participants: true,
+                participants: { orderBy: { id: 'asc' } },
                 enemies: { orderBy: { order: 'asc' } },
                 logs: { orderBy: { timestamp: 'desc' }, take: 50 }
             }
