@@ -496,7 +496,7 @@ export default function App() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="rpg-card p-10 max-w-xl w-full text-center shadow-2xl relative">
-          <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight mb-2">📯 Select Your Quest</h1>
+          <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight mb-2">📯 Select Your Forge</h1>
           <div className="flex items-center gap-3 mb-10 w-48 mx-auto">
             <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">Choose Wisely</span>
             <div className="h-px bg-[#5c5346]/20 flex-1"></div>
@@ -518,7 +518,7 @@ export default function App() {
                     e.stopPropagation();
                     handleDeleteCampaign(c.id);
                   }}
-                  className="absolute top-2 right-2 p-2 text-[#8b0000] opacity-20 hover:opacity-100 transition-opacity text-xl font-bold"
+                  className="absolute top-2 right-2 p-2 text-[#8b0000] opacity-60 hover:opacity-100 transition-opacity text-xl font-bold"
                   aria-label="Delete Campaign"
                 >
                   ×
@@ -528,7 +528,7 @@ export default function App() {
           </div>
 
           <button onClick={() => setView('create')} className="w-full py-4 button-hollow text-sm">
-            Forge New Quest
+            New Forge
           </button>
         </div>
       </div>
