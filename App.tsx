@@ -40,7 +40,7 @@ const KragCommandments: React.FC<{ onClose?: () => void; noMargin?: boolean }> =
       <ul className="space-y-4 text-sm md:text-base italic font-medium leading-relaxed opacity-90 max-w-xl mx-auto">
         <li className="flex gap-4"><span>📜</span> "The Forge only responds to physical sweat. Every real-world workout always strikes the foe, unless the fates (d20) fumble."</li>
         <li className="flex gap-4"><span>📜</span> "Damage is a simple sum of your effort: Roll d20 + Your Strength (Level) + Weapon Modifier."</li>
-        <li className="flex gap-4 text-[#8b0000] font-black"><span>📜</span> "A Natural 20 is an INSTANT KILL! The foe falls immediately, and you earn an extra Pip!"</li>
+        <li className="flex gap-4 text-[#8b0000] font-black"><span>📜</span> "A Natural 20 is an INSTANT KILL! The foe falls immediately."</li>
         <li className="flex gap-4 opacity-50"><span>📜</span> "A Natural 1 is a Total Miss. You deal 0 damage this strike."</li>
         <li className="flex gap-4"><span>📜</span> "Inspired Heroes (Gold) have gone above and beyond. Do extra workouts to earn this blessing."</li>
         <li className="flex gap-4 text-[#8b0000]"><span>📜</span> "Shadow Growth & Shrink: Missed workouts strengthen the final boss, but extra effort shrinks its vitality."</li>
@@ -605,10 +605,12 @@ export default function App() {
 
             <div className="space-y-6 pt-6 border-t border-[#5c5346]/10">
               <div className="text-center">
-                <div className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-1">Ritual of the First Shadow</div>
-                <h4 className="text-xl font-black uppercase tracking-tight">The Primordial Foe</h4>
+                <div className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-1">{createForm.weeks === 1 ? 'Ritual of the Final Shadow' : 'Ritual of the First Shadow'}</div>
+                <h4 className="text-xl font-black uppercase tracking-tight">{createForm.weeks === 1 ? 'The Final Shadow' : 'The Primordial Foe'}</h4>
                 <p className="text-[10px] opacity-50 uppercase tracking-widest mt-2 max-w-sm mx-auto leading-relaxed">
-                  Every great journey begins with a challenge. Be creative—this is the first shared enemy the entire fellowship will face together.
+                  {createForm.weeks === 1
+                    ? "In a one-week quest, you face the Final Shadow immediately. Name the terror that awaits at the end of your short, brutal journey."
+                    : "Every great journey begins with a challenge. Be creative—this is the first shared enemy the entire fellowship will face together."}
                 </p>
               </div>
 
@@ -1040,7 +1042,7 @@ export default function App() {
             </section>
 
             <section className="max-w-2xl mx-auto mb-12">
-              <div className="text-center italic opacity-40 text-[10px] uppercase tracking-[0.2em] mb-4">The Forge only responds to physical sweat. Strike while the iron is hot.</div>
+              <div className="text-center italic opacity-40 text-[10px] uppercase tracking-[0.2em] mb-4">All enemies are vulnerable to sweat. So get moving!</div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                 {[...(participants || [])].sort((a, b) => a.id.localeCompare(b.id)).map((p: any) => {
                   return (

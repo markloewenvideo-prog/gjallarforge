@@ -69,7 +69,7 @@ export const performAction = async (req: Request, res: Response) => {
 
         // --- UPDATE STATS ---
         // --- UPDATE STATS ---
-        const pipsToAdd = isNat20 ? 2 : 1;
+        const pipsToAdd = 1;
 
         console.log(`[DEBUG] Updating pips for ${participant.name}: +${pipsToAdd}`);
 

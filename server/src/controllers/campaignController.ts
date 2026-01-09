@@ -18,14 +18,10 @@ const calculateExpectedWeeklyDamage = (numParticipants: number, workoutsPerWeek:
 };
 
 export const createCampaign = async (req: Request, res: Response) => {
-    console.log("[DEBUG] Request-time DATABASE_URL:", process.env.DATABASE_URL);
     try {
         const { name: rawName, config: rawConfig, participantsNames, initialEnemy } = req.body;
-
-        // Handle config being passed as a string (from our API service)
         const config = typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig;
 
-        // Handle naming convention: Forge 1, Forge 2...
         let name = (rawName || "").trim();
         if (!name) {
             const count = await prisma.campaign.count();
@@ -36,211 +32,133 @@ export const createCampaign = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Missing required fields or invalid participants list" });
         }
 
-        console.log("[DEBUG] Starting createCampaign for:", name);
+        const workoutsPerWeek = Number(config.workoutsPerWeek || 3);
+        const totalWeeks = Math.max(1, Number(config.totalWeeks || config.weeks || 4));
 
-        // 1. Local Enemy Generation
-        console.log("[DEBUG] Step 1: Generating enemies...");
-        let generatedMonsterData: any[];
-        try {
-            const totalWeeks = Math.max(1, Number(config.totalWeeks || config.weeks || 4));
-            generatedMonsterData = [];
-
-            for (let week = 0; week < totalWeeks; week++) {
-                const isFinalWeek = week === totalWeeks - 1;
-
-                // 1. Weak Monster
-                const weakPool = MONSTER_TIERS.WEAK;
-                const weakMonster = (Math.random() > 0.5 ? weakPool.funny : weakPool.regular)[Math.floor(Math.random() * weakPool.regular.length)];
-                generatedMonsterData.push({ ...weakMonster, type: 'WEAK', week });
-
-                // 2. Medium Monster
-                const medPool = MONSTER_TIERS.MEDIUM;
-                const medMonster = (Math.random() > 0.5 ? medPool.funny : medPool.regular)[Math.floor(Math.random() * medPool.regular.length)];
-                generatedMonsterData.push({ ...medMonster, type: 'MEDIUM', week });
-
-                // 3. Hard Monster (or Boss)
-                let hardPool = isFinalWeek ? MONSTER_TIERS.BOSS : MONSTER_TIERS.HARD;
-                const hardMonster = (Math.random() > 0.5 ? hardPool.funny : hardPool.regular)[Math.floor(Math.random() * hardPool.regular.length)];
-
-                let finalHard = { ...hardMonster, type: 'HARD', week };
-
-                // Override for the first week's Hard monster if provided
-                if (week === 0 && initialEnemy && typeof initialEnemy === 'object') {
-                    finalHard.name = initialEnemy.name || finalHard.name;
-                    finalHard.description = initialEnemy.description || finalHard.description;
-                }
-
-                // If final week, add "The Shadow of" prefix if not there
-                if (isFinalWeek && !finalHard.name.startsWith("The Shadow of")) {
-                    finalHard.name = `The Shadow of ${finalHard.name}`;
-                }
-
-                generatedMonsterData.push(finalHard);
+        // 1. Generate Monster Data
+        const generatedMonsterData = [];
+        for (let week = 0; week < totalWeeks; week++) {
+            const isFinalWeek = week === totalWeeks - 1;
+            let pool;
+            if (isFinalWeek) {
+                pool = MONSTER_TIERS.BOSS;
+            } else if (week < totalWeeks / 4) {
+                pool = MONSTER_TIERS.WEAK;
+            } else if (week < (2 * totalWeeks) / 4) {
+                pool = MONSTER_TIERS.MEDIUM;
+            } else {
+                pool = MONSTER_TIERS.HARD;
             }
-            console.log("[DEBUG] Generation complete. Count:", generatedMonsterData.length);
-        } catch (e: any) {
-            console.error("[DEBUG] Step 1 Failed:", e);
-            throw new Error(`Enemy Generation Failed: ${e.message}`);
+
+            const monster = (Math.random() > 0.5 ? pool.funny : pool.regular)[Math.floor(Math.random() * pool.regular.length)];
+            let finalMonster = { ...monster, type: isFinalWeek ? 'BOSS' : 'REGULAR', week };
+
+            if (week === 0 && initialEnemy && typeof initialEnemy === 'object') {
+                finalMonster.name = initialEnemy.name || finalMonster.name;
+                finalMonster.description = initialEnemy.description || finalMonster.description;
+            }
+
+            // Only add prefix if it's the final week AND not the first week (unless it's a multi-week quest)
+            // Or better: only add prefix if the user DIDN'T just name this specific monster
+            const userNamedThisInWeek0 = week === 0 && initialEnemy?.name;
+            if (isFinalWeek && !finalMonster.name.startsWith("The Shadow of") && !userNamedThisInWeek0) {
+                finalMonster.name = `The Shadow of ${finalMonster.name}`;
+            }
+            generatedMonsterData.push(finalMonster);
         }
 
         // 2. Prepare Participants
-        console.log("[DEBUG] Step 2: Preparing participants...");
         const participantsData = [];
-        try {
-            console.log("[DEBUG] participantsNames type:", typeof participantsNames, "isArray:", Array.isArray(participantsNames));
-            console.log("[DEBUG] participantsNames content:", JSON.stringify(participantsNames));
+        for (const pName of participantsNames) {
+            if (!pName) continue;
+            const cleanName = String(pName).trim();
+            if (!cleanName) continue;
 
-            if (!prisma.user) {
-                console.error("[DEBUG] CRITICAL: prisma.user is missing!", Object.keys(prisma));
-                throw new Error("The Fellowship Hall (User table) is not correctly initialized in the Forge. Contact Krag.");
+            let user = await (prisma.user as any).findFirst({ where: { username: { equals: cleanName } } });
+            if (!user) {
+                const passwordHash = await bcrypt.hash('password123', 10);
+                user = await prisma.user.create({ data: { username: cleanName, passwordHash } });
             }
-
-            for (const pName of participantsNames) {
-                console.log("[DEBUG] Processing pName:", typeof pName, pName);
-                if (pName === null || pName === undefined) continue;
-
-                const cleanName = String(pName).trim();
-                if (!cleanName || cleanName === "null" || cleanName === "undefined") continue;
-
-                console.log("[DEBUG] Searching for user:", cleanName);
-                let user = await (prisma.user as any).findFirst({
-                    where: {
-                        username: {
-                            equals: cleanName
-                        }
-                    }
-                });
-
-                if (!user) {
-                    console.log("[DEBUG] Creating new user for:", cleanName);
-                    const passwordHash = await bcrypt.hash('password123', 10);
-                    user = await prisma.user.create({
-                        data: { username: cleanName, passwordHash }
-                    });
-                }
-                participantsData.push({
-                    name: cleanName,
-                    userId: user.id
-                });
-            }
-            console.log("[DEBUG] Participants ready:", participantsData.length);
-        } catch (e: any) {
-            console.error("[DEBUG] Step 2 Failed:", e);
-            throw new Error(`Hero Selection Failed: ${e.message}`);
+            participantsData.push({ name: cleanName, userId: user.id });
         }
 
-        // 3. Create Campaign and related entities
-        console.log("[DEBUG] Step 3: Executing Database Transaction...");
-        try {
-            const workoutsPerWeek = Number(config.workoutsPerWeek || 3);
-            const totalWeeks = Math.max(1, Number(config.totalWeeks || config.weeks || 4));
-
-            const campaign = await prisma.campaign.create({
-                data: {
-                    name,
-                    config: JSON.stringify({ ...config, totalWeeks, workoutsPerWeek }),
-                    currentWeek: 1,
-                    participants: {
-                        create: participantsData.map(p => ({
-                            name: p.name,
-                            userId: p.userId,
-                            level: 1,
-                            weaponTier: 0
-                        }))
-                    },
-                    enemies: {
-                        create: generatedMonsterData.map((data: any, i: number) => {
-                            const weekIndex = Math.floor(i / 3);
-                            const typeInWeek = i % 3; // 0=Weak, 1=Medium, 2=Hard
-
-                            // Weapon drops only on Hard monsters (the 3rd of the week)
-                            const dropTier = typeInWeek === 2 ? getWeaponDropTier(weekIndex, totalWeeks) : 0;
-
-                            // Weekly damage expectation
-                            const expectedLevel = 1 + weekIndex;
-                            const totalCampaignWorkouts = participantsData.length * workoutsPerWeek * totalWeeks;
-
-                            const isFinalBoss = i === (totalWeeks * 3) - 1;
-
-                            // HP BUDGETING
-                            // Let's reserve 30% for the Final Boss.
-                            // Split remaining across weeks, then within weeks: 15/30/55
-                            const finalBossBudget = 0.30;
-                            const remainingBudget = 1.0 - finalBossBudget;
-                            const weeklyBudget = remainingBudget / totalWeeks;
-
-                            let enemyBudget;
-                            if (isFinalBoss) {
-                                enemyBudget = finalBossBudget;
-                            } else {
-                                const weekWeights = [0.15, 0.30, 0.55];
-                                enemyBudget = weeklyBudget * weekWeights[typeInWeek];
-                            }
-
-                            const budgetedWorkouts = totalCampaignWorkouts * enemyBudget;
-
-                            // Damage scaling
-                            // Use previous week's weapon for current expected damage
-                            const prevWeaponTier = weekIndex === 0 ? 0 : getWeaponDropTier(weekIndex - 1, totalWeeks);
-                            const currentWeaponBonus = calculateAvgWeaponDamage(prevWeaponTier);
-                            const avgDamagePerHit = 10.5 + expectedLevel + currentWeaponBonus;
-
-                            const toughness = isFinalBoss ? 1.5 : (typeInWeek === 2 ? 1.1 : 0.9);
-                            const hp = Math.ceil(budgetedWorkouts * avgDamagePerHit * toughness);
-
-                            const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
-                            const finalDescription = (i === 2 && weekIndex === 0 && initialEnemy)
-                                ? data.description
-                                : `${data.description} Beware its ${spell}!`;
-
-                            return {
-                                name: data.name,
-                                description: finalDescription,
-                                hp: Math.max(10, hp),
-                                maxHp: Math.max(10, hp),
-                                ac: 10,
-                                weaponDropTier: dropTier,
-                                order: i,
-                                isDead: false
-                            };
-                        })
-                    },
-                    logs: {
-                        create: [
-                            {
-                                type: 'system',
-                                content: JSON.stringify({ message: `The Forge is lit for ${name}. The journey begins.` })
-                            },
-                            ...(generatedMonsterData.length > 0 ? [{
-                                type: 'system',
-                                content: JSON.stringify({
-                                    message: `EVENT_ENEMYNAMED:${generatedMonsterData[0].name}`,
-                                    enemyName: generatedMonsterData[0].name,
-                                    description: generatedMonsterData[0].description
-                                })
-                            }] : [])
-                        ]
-                    }
+        // 3. Create Campaign
+        const campaign = await prisma.campaign.create({
+            data: {
+                name,
+                config: JSON.stringify({ ...config, totalWeeks, workoutsPerWeek }),
+                currentWeek: 1,
+                participants: {
+                    create: participantsData.map(p => ({
+                        name: p.name,
+                        userId: p.userId,
+                        level: 1,
+                        weaponTier: 0
+                    }))
                 },
-                include: {
-                    participants: true,
-                    enemies: true,
-                    logs: true
-                }
-            });
+                enemies: {
+                    create: generatedMonsterData.map((data: any, i: number) => {
+                        const isFinalBoss = i === totalWeeks - 1;
+                        const dropTier = 1 + Math.floor(i * 9 / Math.max(1, totalWeeks - 1));
 
-            console.log("[DEBUG] Campaign Created Successfully:", campaign.id);
-            res.json(campaign);
-        } catch (e: any) {
-            console.error("[DEBUG] Step 3 Failed:", e);
-            throw new Error(`Database Transaction Failed: ${e.message}`);
-        }
+                        let hp;
+                        if (isFinalBoss) {
+                            const totalCampaignWorkouts = participantsData.length * workoutsPerWeek * totalWeeks;
+                            const avgDamagePerHit = 10.5 + totalWeeks + calculateAvgWeaponDamage(Math.floor(totalWeeks * 9 / totalWeeks));
+                            hp = Math.ceil(totalCampaignWorkouts * 0.30 * avgDamagePerHit * 1.5);
+                        } else if (totalWeeks === 1) {
+                            hp = 50;
+                        } else {
+                            const startHP = 10;
+                            const endHP = 200;
+                            if (totalWeeks === 2) {
+                                hp = startHP;
+                            } else {
+                                const r = Math.pow(endHP / startHP, 1 / (totalWeeks - 2));
+                                hp = Math.ceil(startHP * Math.pow(r, i));
+                            }
+                        }
+
+                        const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
+                        const description = (i === 0 && initialEnemy) ? data.description : `${data.description} Beware its ${spell}!`;
+
+                        return {
+                            name: data.name,
+                            description,
+                            hp: Math.max(7, hp),
+                            maxHp: Math.max(7, hp),
+                            ac: 10,
+                            weaponDropTier: dropTier,
+                            order: i,
+                            isDead: false
+                        };
+                    })
+                },
+                logs: {
+                    create: [
+                        { type: 'system', content: JSON.stringify({ message: `The Forge is lit for ${name}. The journey begins.` }) },
+                        ...(generatedMonsterData.length > 0 ? [{
+                            type: 'system',
+                            content: JSON.stringify({
+                                message: `EVENT_ENEMYNAMED: ${generatedMonsterData[0].name}`,
+                                enemyName: generatedMonsterData[0].name,
+                                description: generatedMonsterData[0].description
+                            })
+                        }] : [])
+                    ]
+                }
+            },
+            include: {
+                participants: true,
+                enemies: true,
+                logs: true
+            }
+        });
+
+        res.json(campaign);
     } catch (error: any) {
         console.error('Campaign creation error:', error);
-        res.status(500).json({
-            error: 'Ritual failed. The Forge rejected your request.',
-            details: error.message || String(error)
-        });
+        res.status(500).json({ error: 'Ritual failed.', details: error.message });
     }
 };
 
@@ -496,7 +414,7 @@ export const forgeAhead = async (req: Request, res: Response) => {
             // But we already set meaningful text in UI, system logs should capture transitions.
             const transitionMessage = (statusChange === 'saved' && p.isCursed) ? `EVENT_SAVED:${p.name} has been cleansed of their curse.` :
                 (statusChange === 'inspired' && !p.isInspired) ? `EVENT_INSPIRED:${p.name} burns with divine inspiration!` :
-                    (statusChange === 'cursed' && !p.isCursed) ? `EVENT_CURSED:${p.name} has stumbled. A shadow clings to them.` : '';
+                    (statusChange === 'cursed' && !p.isCursed) ? `EVENT_CURSED:${p.name} has stumbled.A shadow clings to them.` : '';
 
             if (transitionMessage) {
                 statusLogs.push(prisma.logEntry.create({
@@ -517,7 +435,7 @@ export const forgeAhead = async (req: Request, res: Response) => {
                         campaignId: id,
                         type: 'system',
                         content: JSON.stringify({
-                            message: `EVENT_LEVELUP:${p.name} has reached Level ${p.level + 1}! Their strength grows.`,
+                            message: `EVENT_LEVELUP:${p.name} has reached Level ${p.level + 1} !Their strength grows.`,
                             participantName: p.name,
                             newLevel: p.level + 1
                         })
@@ -572,8 +490,8 @@ export const forgeAhead = async (req: Request, res: Response) => {
                             campaignId: id,
                             name: data.name,
                             description: data.description,
-                            hp: 50 + (campaign.currentWeek * 10), // Scaling weak HP
-                            maxHp: 50 + (campaign.currentWeek * 10),
+                            hp: 10,
+                            maxHp: 10,
                             ac: 10,
                             weaponDropTier: 0,
                             order: bossOrder + i,
@@ -707,8 +625,12 @@ export const renameEnemy = async (req: Request, res: Response) => {
             where: { id: enemy.campaignId }
         });
         const config = campaignRecord ? JSON.parse(campaignRecord.config) : {};
-        const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
-        const isFinalBoss = Number(order) === totalWeeks - 1;
+
+        const maxOrderEnemy = await prisma.enemy.findFirst({
+            where: { campaignId: id },
+            orderBy: { order: 'desc' }
+        });
+        const isFinalBoss = Number(order) === maxOrderEnemy?.order;
 
         let finalName = name.trim();
         if (isFinalBoss && !finalName.startsWith("The Shadow of")) {
