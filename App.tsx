@@ -1229,14 +1229,23 @@ export default function App() {
                     );
                   }
 
-                  // Milestone: ENEMY_NAMED
-                  if (log.type === 'system' && content.message?.includes('EVENT_ENEMYNAMED')) {
+                  // Milestone: A New Threat Emerges
+                  if (log.type === 'system' && (content.message?.includes('EVENT_ENEMYNAMED') || content.message?.includes('A New Threat Emerges'))) {
+                    const enemyName = content.enemyName || content.message?.split(':')[1]?.trim() || "The Void";
+                    const description = content.description || "The shadow manifests in the forge.";
+
                     return (
-                      <div key={log.id} className="py-6 px-10 border-2 border-double border-[#5c5346]/20 mx-8 my-6 bg-white/20 text-center relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-[#5c5346]/10" />
-                        <div className="text-[8px] font-bold uppercase tracking-[0.4em] opacity-30 mb-2">A New Threat Emerges</div>
-                        <div className="text-xl font-black uppercase tracking-tight text-[#3a352f] mb-2">{content.enemyName}</div>
-                        <div className="text-[10px] italic opacity-50 px-4">"{content.description}"</div>
+                      <div key={log.id} className="py-12 px-10 border-4 border-double border-[#5c5346]/30 mx-4 my-8 bg-[#3a352f]/5 text-center relative overflow-hidden shadow-xl animate-in zoom-in-95 duration-700">
+                        <div className="absolute top-0 left-0 w-full h-1.5 bg-[#8b0000]/40" />
+                        <div className="text-[10px] font-black uppercase tracking-[0.6em] text-[#8b0000] mb-4">A New Threat Emerges</div>
+                        <div className="text-3xl md:text-5xl font-black uppercase tracking-tighter text-[#3a352f] mb-4 leading-none">
+                          {enemyName}
+                        </div>
+                        <div className="h-px bg-[#5c5346]/20 w-32 mx-auto mb-5" />
+                        <div className="text-sm md:text-base italic opacity-70 px-8 max-w-xl mx-auto leading-relaxed pencil-font">
+                          "{description}"
+                        </div>
+                        <div className="absolute bottom-0 left-0 w-full h-1.5 bg-[#5c5346]/10" />
                       </div>
                     );
                   }
