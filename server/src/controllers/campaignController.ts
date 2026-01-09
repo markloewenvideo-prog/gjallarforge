@@ -35,39 +35,117 @@ export const createCampaign = async (req: Request, res: Response) => {
         const workoutsPerWeek = Number(config.workoutsPerWeek || 3);
         const totalWeeks = Math.max(1, Number(config.totalWeeks || config.weeks || 4));
 
-        // 1. Generate Monster Data
+        // --- ADVANCED HP SCALING MODEL ---
+        const P = participantsNames.length;
+        const W = totalWeeks;
+        const A = workoutsPerWeek;
+        const T = W * A; // Total attacks per player
+        const efficiencyFactor = 0.85; // η
+        const difficultyMultiplier = 1.15; // k
+        const instakillBurnFactor = 18 / 20; // Accounts for Nat-1 misses and Nat-20 skips
+
+        // 1. Calculate Campaign HP Budget
+        let totalHPBurn = 0;
+        for (let t = 0; t < T; t++) {
+            const currentWeek = Math.floor(t / A);
+            const levelAtAttack = 1 + currentWeek; // Players level up weekly
+            const weaponModAtAttack = Math.floor(currentWeek / 2); // Loose assumption: Tier up every 2 weeks
+            const expectedDamage = (10.5 + levelAtAttack + weaponModAtAttack);
+            totalHPBurn += expectedDamage * instakillBurnFactor;
+        }
+        const campaignHPBudget = Math.ceil(totalHPBurn * P * efficiencyFactor * difficultyMultiplier);
+
+        // 2. Determine Enemy Counts (Instakill Heuristic)
+        const expectedInstakills = (P * T) * (1 / 20);
+        // choose the number of non-boss enemies so that instakills remove roughly 20% of them
+        // Floor at W (at least 1 per week) and cap density at 4 per week to prevent slog
+        let numNormalEnemies = Math.max(W, Math.round(expectedInstakills / 0.2));
+        numNormalEnemies = Math.min(numNormalEnemies, W * 4);
+        const totalEnemies = numNormalEnemies + 1;
+
+        // 3. Allocate HP Pool
+        const bossHP = Math.ceil(campaignHPBudget * 0.25);
+        const normalHPPool = campaignHPBudget - bossHP;
+
+        // Exponential distribution for normal enemies: HPi = a * b^i + offset where b = 1.15
+        const b = 1.15;
+        const offset = 12; // Base HP
+
+        let a = 0;
+        if (numNormalEnemies > 0) {
+            // Formula for sum involving base offset: Pool = a * (b^n - 1) / (b - 1) + n * offset
+            // Solve for a: a = (Pool - n * offset) * (b - 1) / (Math.pow(b, numNormalEnemies) - 1)
+            const denominator = Math.pow(b, numNormalEnemies) - 1;
+            if (denominator > 0) {
+                a = Math.max(0, (normalHPPool - (numNormalEnemies * offset)) * (b - 1) / denominator);
+            }
+        }
+
+        const enemyHPs: number[] = [];
+        for (let i = 0; i < numNormalEnemies; i++) {
+            enemyHPs.push(Math.max(15, Math.ceil(a * Math.pow(b, i) + offset)));
+        }
+        enemyHPs.push(Math.max(25, bossHP)); // Bosses have a higher floor
+
+        // 4. Generate Monsters
         const generatedMonsterData = [];
-        for (let week = 0; week < totalWeeks; week++) {
-            const isFinalWeek = week === totalWeeks - 1;
+        for (let i = 0; i < totalEnemies; i++) {
+            const isFinalBoss = i === totalEnemies - 1;
             let pool;
-            if (isFinalWeek) {
+            if (isFinalBoss) {
                 pool = MONSTER_TIERS.BOSS;
-            } else if (week < totalWeeks / 4) {
+            } else if (i < totalEnemies / 3) {
                 pool = MONSTER_TIERS.WEAK;
-            } else if (week < (2 * totalWeeks) / 4) {
+            } else if (i < (2 * totalEnemies) / 3) {
                 pool = MONSTER_TIERS.MEDIUM;
             } else {
                 pool = MONSTER_TIERS.HARD;
             }
 
             const monster = (Math.random() > 0.5 ? pool.funny : pool.regular)[Math.floor(Math.random() * pool.regular.length)];
-            let finalMonster = { ...monster, type: isFinalWeek ? 'BOSS' : 'REGULAR', week };
+            let resultMonster = { ...monster, type: isFinalBoss ? 'BOSS' : 'REGULAR' };
 
-            if (week === 0 && initialEnemy && typeof initialEnemy === 'object') {
-                finalMonster.name = initialEnemy.name || finalMonster.name;
-                finalMonster.description = initialEnemy.description || finalMonster.description;
+            // Apply custom naming for week 0 if it was the first monster (now index 0)
+            if (i === 0 && initialEnemy?.name) {
+                resultMonster.name = initialEnemy.name;
+                resultMonster.description = initialEnemy.description || resultMonster.description;
             }
 
-            // Only add prefix if it's the final week AND not the first week (unless it's a multi-week quest)
-            // Or better: only add prefix if the user DIDN'T just name this specific monster
-            const userNamedThisInWeek0 = week === 0 && initialEnemy?.name;
-            if (isFinalWeek && !finalMonster.name.startsWith("The Shadow of") && !userNamedThisInWeek0) {
-                finalMonster.name = `The Shadow of ${finalMonster.name}`;
+            // Prefix final boss name unless already shadow-themed
+            if (isFinalBoss && !resultMonster.name.startsWith("The Shadow of")) {
+                resultMonster.name = `The Shadow of ${resultMonster.name}`;
             }
-            generatedMonsterData.push(finalMonster);
+
+            const hp = enemyHPs[i];
+            const monsterLevel = isFinalBoss ? W + 1 : Math.min(W, Math.floor(i / (numNormalEnemies / W)) + 1);
+
+            let dropTier = 0;
+            // Progressive loot tiers based on HP thresholds
+            if (hp < 15) dropTier = 1;
+            else if (hp < 40) dropTier = 2;
+            else if (hp < 80) dropTier = 3;
+            else if (hp < 130) dropTier = 4;
+            else if (hp < 200) dropTier = 5;
+            else dropTier = 10;
+
+            const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
+            const description = resultMonster.description + (isFinalBoss ? "" : ` Beware its ${spell}!`);
+
+            generatedMonsterData.push({
+                name: resultMonster.name,
+                description,
+                hp: hp,
+                maxHp: hp,
+                ac: 10,
+                level: monsterLevel,
+                type: isFinalBoss ? 'BOSS' : 'REGULAR',
+                weaponDropTier: isFinalBoss ? Math.max(dropTier, 5) : dropTier, // Bosses drop good stuff
+                order: i,
+                isDead: false
+            });
         }
 
-        // 2. Prepare Participants
+        // 5. Prepare Participants
         const participantsData = [];
         for (const pName of participantsNames) {
             if (!pName) continue;
@@ -82,11 +160,11 @@ export const createCampaign = async (req: Request, res: Response) => {
             participantsData.push({ name: cleanName, userId: user.id });
         }
 
-        // 3. Create Campaign
+        // 6. Create Campaign
         const campaign = await prisma.campaign.create({
             data: {
                 name,
-                config: JSON.stringify({ ...config, totalWeeks, workoutsPerWeek }),
+                config: JSON.stringify({ ...config, totalWeeks, workoutsPerWeek, totalEnemies }),
                 currentWeek: 1,
                 participants: {
                     create: participantsData.map(p => ({
@@ -97,55 +175,7 @@ export const createCampaign = async (req: Request, res: Response) => {
                     }))
                 },
                 enemies: {
-                    create: generatedMonsterData.map((data: any, i: number) => {
-                        const isFinalBoss = i === totalWeeks - 1;
-                        let hp;
-
-                        // Dynamic calculation based on expected weekly damage
-                        const weeklyDamage = calculateExpectedWeeklyDamage(participantsData.length, workoutsPerWeek);
-                        const firstHP = Math.max(10, Math.ceil(weeklyDamage * 0.8)); // Week 1 foe takes ~80% of a perfect week
-
-                        if (totalWeeks === 1) {
-                            // If it's a 1-week sprint, the boss should be beefy
-                            hp = Math.ceil(weeklyDamage * 2.5);
-                        } else {
-                            // Exponential growth factor
-                            // Final boss should have roughly (totalWeeks * 1.5) times more HP than the first foe
-                            // but at least 5x and capped at something reasonable if extremely long
-                            const totalGrowth = Math.max(5, totalWeeks * 1.5);
-                            const growthPerWeek = Math.pow(totalGrowth, 1 / (totalWeeks - 1));
-                            hp = Math.ceil(firstHP * Math.pow(growthPerWeek, i));
-                        }
-
-                        // Apply a multiplier for the final boss to make it "significantly" higher
-                        if (isFinalBoss && totalWeeks > 1) {
-                            hp = Math.ceil(hp * 1.5);
-                        }
-
-                        const finalHP = Math.max(10, hp);
-
-                        let dropTier = 0;
-                        if (finalHP < 15) dropTier = 1;
-                        else if (finalHP < 55) dropTier = 2;
-                        else if (finalHP < 105) dropTier = 3;
-                        else if (finalHP < 155) dropTier = 4;
-                        else if (finalHP < 250) dropTier = 5;
-                        else dropTier = 10;
-
-                        const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
-                        const description = (i === 0 && initialEnemy) ? data.description : `${data.description} Beware its ${spell}!`;
-
-                        return {
-                            name: data.name,
-                            description,
-                            hp: finalHP,
-                            maxHp: finalHP,
-                            ac: 10,
-                            weaponDropTier: dropTier,
-                            order: i,
-                            isDead: false
-                        };
-                    })
+                    create: generatedMonsterData
                 },
                 logs: {
                     create: [
@@ -537,7 +567,9 @@ export const forgeAhead = async (req: Request, res: Response) => {
                         campaignId: id,
                         type: 'system',
                         content: JSON.stringify({
-                            message: `THE_SHADOW_GROWS: ${summary.totalMisses} Shadow Monsters have manifested from missed Oaths! They stand between you and the final shadow.`
+                            message: summary.shadowMonstersSpawned > 0
+                                ? `THE_SHADOW_GROWS: ${summary.shadowMonstersSpawned} Shadow Monsters have manifested from missed Oaths! They stand between you and the final shadow.`
+                                : `THE_SHADOW_GROWS: The final shadow's presence deepens, its vitality swelling by ${summary.shadowGrowthHP}.`
                         })
                     }
                 });
@@ -605,27 +637,12 @@ export const forgeAhead = async (req: Request, res: Response) => {
             }
 
             summary.shadowMonstersBanished = totalBanishedCount;
-            const remainingZeal = numToBanish;
 
-            if (remainingZeal > 0) {
-                // Apply remaining zeal to boss HP
-                const penaltyPerWorkout = 15 + totalWeeks;
-                const hpAdjustment = -(remainingZeal * penaltyPerWorkout);
-                summary.shadowShrinkHP = Math.abs(hpAdjustment);
-
-                if (finalBoss && !finalBoss.isDead) {
-                    const newHP = Math.max(1, finalBoss.hp + hpAdjustment);
-                    const newMaxHP = Math.max(1, finalBoss.maxHp + hpAdjustment);
-
-                    await prisma.enemy.update({
-                        where: { id: finalBoss.id },
-                        data: {
-                            hp: newHP,
-                            maxHp: newMaxHP,
-                            adjustmentHp: { increment: hpAdjustment }
-                        } as any
-                    });
-                }
+            let recedeMessage = "";
+            if (totalBanishedCount > 0) {
+                recedeMessage = `THE_SHADOW_RECEDES: The fellowship's zeal banishes ${totalBanishedCount} horrors.`;
+            } else {
+                recedeMessage = `THE_SHADOW_RECEDES: The darkness falters before your determination.`;
             }
 
             await prisma.logEntry.create({
@@ -633,7 +650,7 @@ export const forgeAhead = async (req: Request, res: Response) => {
                     campaignId: id,
                     type: 'system',
                     content: JSON.stringify({
-                        message: `THE_SHADOW_RECEDES: The fellowship's zeal quells the darkness, banishing ${totalBanishedCount} horrors and weakening the final foe.`
+                        message: recedeMessage
                     })
                 }
             });

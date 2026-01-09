@@ -48,7 +48,7 @@ const KragCommandments: React.FC<{ onClose?: () => void; noMargin?: boolean }> =
         <li className="flex gap-4 text-[#8b0000] font-black"><span>📜</span> "The Shadow of... (Final Boss) is resilient. A Natural 20 deals DOUBLE TOTAL DAMAGE rather than an instant kill."</li>
         <li className="flex gap-4"><span>📜</span> "When a foe falls, the one with the highest total D20 rolls (The Fair Sweat Rule) claims the loot. The quality of the loot reflects the foe's vitality (HP)."</li>
         <li className="flex gap-4 opacity-70"><span>📜</span> "A Hero may only carry one armament of a kind. If the swiftest hunter already bears a superior blade, the spoils flow to the next in merit."</li>
-        <li className="flex gap-4 text-[#8b0000]"><span>📜</span> "Shadow Growth & Shrink: Missed workouts strengthen the final boss, but extra effort shrinks its vitality."</li>
+        <li className="flex gap-4 text-[#8b0000]"><span>📜</span> "Shadow Growth & Recede: Missed Oaths manifest shadow monsters, while extra effort (The Shadow Recedes) banishes these horrors and grants divine Inspiration."</li>
         <li className="flex gap-4 font-black uppercase tracking-tighter not-italic mt-6 text-[#3a352f] justify-center text-lg md:text-xl border-t border-[#5c5346]/10 pt-4 text-center">"Now back to work."</li>
       </ul>
     </div>
@@ -72,7 +72,17 @@ const EnemyDisplay: React.FC<{ enemy: any }> = ({ enemy }) => {
 
         <div className="flex justify-between items-start mb-6">
           <div className="flex-1">
-            <h2 className="text-3xl font-black uppercase tracking-tight mb-2 leading-none">{enemy.name}</h2>
+            <h2 className="text-3xl font-black uppercase tracking-tight mb-1 leading-none">{enemy.name}</h2>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] px-2 py-0.5 bg-[#8b0000] text-[#fdf6e3] rounded-sm shadow-sm ring-1 ring-[#8b0000]/20">
+                Threat Level {enemy.level}
+              </span>
+              {enemy.type === 'BOSS' && (
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] px-2 py-0.5 bg-yellow-400 text-[#3a352f] rounded-sm shadow-sm ring-1 ring-yellow-500/20 animate-pulse">
+                  Final Shadow
+                </span>
+              )}
+            </div>
             <p className="italic opacity-70 text-lg leading-snug">{enemy.description}</p>
           </div>
         </div>
@@ -1202,16 +1212,19 @@ export default function App() {
                   }
 
                   // Milestone: SHADOW_MOVEMENTS
-                  if (log.type === 'system' && (content.message?.includes('SHADOW_GROWTH') || content.message?.includes('SHADOW_RECEDES') || content.message?.includes('EVENT_SHADOW_REALM'))) {
-                    const isGrowth = content.message.includes('SHADOW_GROWTH');
+                  if (log.type === 'system' && (content.message?.includes('THE_SHADOW_GROWS') || content.message?.includes('THE_SHADOW_RECEDES') || content.message?.includes('EVENT_SHADOW_REALM'))) {
+                    const isGrowth = content.message.includes('THE_SHADOW_GROWS');
                     const isRealm = content.message.includes('EVENT_SHADOW_REALM');
+                    const [tag, ...messageParts] = content.message.split(':');
+                    const displayMessage = messageParts.join(':').trim();
+
                     return (
                       <div key={log.id} className={`py-4 px-6 border-y border-dashed ${isGrowth ? 'border-[#8b0000]/20 bg-[#8b0000]/5' : isRealm ? 'border-[#3a352f]/40 bg-black/20 text-white' : 'border-green-700/20 bg-green-700/5'} my-4 text-center`}>
                         <div className={`text-[9px] font-bold uppercase tracking-[0.3em] ${isGrowth ? 'text-[#8b0000]' : isRealm ? 'text-white' : 'text-green-800'} mb-1`}>
                           {isGrowth ? 'The Shadow Grows' : isRealm ? 'THRESHOLD CROSSED' : 'The Shadow Recedes'}
                         </div>
                         <div className={`pencil-font text-sm italic ${isRealm ? 'opacity-100' : 'opacity-60'}`}>
-                          "{isRealm ? content.message.split(':')[1].trim() : content.message.split(':')[1].trim()}"
+                          "{displayMessage}"
                         </div>
                       </div>
                     );
@@ -1235,17 +1248,17 @@ export default function App() {
                     const description = content.description || "The shadow manifests in the forge.";
 
                     return (
-                      <div key={log.id} className="py-12 px-10 border-4 border-double border-[#5c5346]/30 mx-4 my-8 bg-[#3a352f]/5 text-center relative overflow-hidden shadow-xl animate-in zoom-in-95 duration-700">
-                        <div className="absolute top-0 left-0 w-full h-1.5 bg-[#8b0000]/40" />
-                        <div className="text-[10px] font-black uppercase tracking-[0.6em] text-[#8b0000] mb-4">A New Threat Emerges</div>
-                        <div className="text-3xl md:text-5xl font-black uppercase tracking-tighter text-[#3a352f] mb-4 leading-none">
+                      <div key={log.id} className="py-8 px-10 border-4 border-double border-[#5c5346]/20 mx-8 my-6 bg-[#3a352f]/5 text-center relative overflow-hidden shadow-lg animate-in zoom-in-95 duration-700">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-[#8b0000]/30" />
+                        <div className="text-[9px] font-black uppercase tracking-[0.5em] text-[#8b0000] mb-3">A New Threat Emerges</div>
+                        <div className="text-2xl md:text-4xl font-black uppercase tracking-tighter text-[#3a352f] mb-3 leading-none">
                           {enemyName}
                         </div>
-                        <div className="h-px bg-[#5c5346]/20 w-32 mx-auto mb-5" />
-                        <div className="text-sm md:text-base italic opacity-70 px-8 max-w-xl mx-auto leading-relaxed pencil-font">
+                        <div className="h-px bg-[#5c5346]/20 w-24 mx-auto mb-4" />
+                        <div className="text-xs md:text-sm italic opacity-70 px-4 max-w-lg mx-auto leading-relaxed pencil-font">
                           "{description}"
                         </div>
-                        <div className="absolute bottom-0 left-0 w-full h-1.5 bg-[#5c5346]/10" />
+                        <div className="absolute bottom-0 left-0 w-full h-1 bg-[#5c5346]/10" />
                       </div>
                     );
                   }

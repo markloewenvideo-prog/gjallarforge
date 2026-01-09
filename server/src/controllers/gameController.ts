@@ -82,8 +82,10 @@ export const performAction = async (req: Request, res: Response) => {
         let isCrit = false;
         let isMiss = false;
 
+        const config = JSON.parse(campaign.config);
         const isShadowMonster = currentEnemy.weaponDropTier === 0;
-        const isFinalBoss = currentEnemy.order === (Number(JSON.parse(campaign.config).totalWeeks || 4) - 1);
+        const totalEnemies = config.totalEnemies || config.totalWeeks || 4;
+        const isFinalBoss = currentEnemy.order === (totalEnemies - 1);
 
         if (rawD20 === 20 || (rawD20 >= 2 && participant.isBlessed && isShadowMonster)) {
             if (isFinalBoss) {

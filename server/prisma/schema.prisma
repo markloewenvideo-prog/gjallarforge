@@ -65,6 +65,8 @@ model Enemy {
   hp             Int
   maxHp          Int
   ac             Int
+  level          Int      @default(1)
+  type           String   @default("REGULAR")
   weaponDropTier Int
   isDead         Boolean  @default(false)
   lootWinnerId   String?
