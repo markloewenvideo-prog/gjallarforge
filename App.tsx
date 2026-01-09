@@ -40,12 +40,12 @@ const KragCommandments: React.FC<{ onClose?: () => void; noMargin?: boolean }> =
       <ul className="space-y-4 text-sm md:text-base italic font-medium leading-relaxed opacity-90 max-w-xl mx-auto">
         <li className="flex gap-4"><span>📜</span> "The Forge only responds to physical sweat. Every real-world workout always strikes the foe, unless the fates (d20) fumble."</li>
         <li className="flex gap-4"><span>📜</span> "Damage is a simple sum of your effort: Roll d20 + Your Strength (Level) + Weapon Modifier."</li>
-        <li className="flex gap-4 text-[#8b0000] font-black"><span>📜</span> "A Natural 20 is an INSTANT KILL! The foe falls immediately."</li>
+        <li className="flex gap-4 text-[#8b0000] font-black"><span>📜</span> "A Natural 20 is an INSTANT KILL! The foe falls immediately (except for the Resilient Bosses)."</li>
         <li className="flex gap-4 opacity-50"><span>📜</span> "A Natural 1 is a Total Miss. You deal 0 damage this strike."</li>
         <li className="flex gap-4"><span>📜</span> "Inspired Heroes (Gold) have gone above and beyond. Do extra workouts to earn this blessing. Their zeal prevents total failure; a Natural 1 is automatically bumped to a 2."</li>
-        <li className="flex gap-4 text-yellow-600 font-bold"><span>📜</span> "Blessed Heroes (Gold/Blue) have kept every Oath until the threshold of the Shadow Realm. In the darkness, their light is true: any strike against a Shadow Monster is an INSTANT KILL (d2-d20)."</li>
-        <li className="flex gap-4 text-[#8b0000]"><span>📜</span> "Cursed Heroes (Black) have neglected their Oaths. The shadows weigh on their strikes; a Natural 20 is automatically bumped down to a 19. Yet, even in darkness, they may claim glory and loot."</li>
-        <li className="flex gap-4 text-[#8b0000] font-black"><span>📜</span> "The Shadow of... (Final Boss) is resilient. A Natural 20 deals DOUBLE DAMAGE rather than an instant kill."</li>
+        <li className="flex gap-4 text-yellow-600 font-bold"><span>📜</span> "Blessed Heroes (Blue) have kept every cumulative Oath until the Shadow Realm. Their light is true: any hit against a Shadow Monster (2+) is an INSTANT KILL. They also carry the 'Inspired' protection against fumbles."</li>
+        <li className="flex gap-4 text-[#8b0000]"><span>📜</span> "Cursed Heroes (Black) have neglected their weekly Oaths. The shadows weigh on their strikes; a Natural 20 is bumped down to a 19. However, finding the 'Blessed' path will purify any curse."</li>
+        <li className="flex gap-4 text-[#8b0000] font-black"><span>📜</span> "The Shadow of... (Final Boss) is resilient. A Natural 20 deals DOUBLE TOTAL DAMAGE rather than an instant kill."</li>
         <li className="flex gap-4"><span>📜</span> "When a foe falls, the one with the highest total D20 rolls (The Fair Sweat Rule) claims the loot. The quality of the loot reflects the foe's vitality (HP)."</li>
         <li className="flex gap-4 opacity-70"><span>📜</span> "A Hero may only carry one armament of a kind. If the swiftest hunter already bears a superior blade, the spoils flow to the next in merit."</li>
         <li className="flex gap-4 text-[#8b0000]"><span>📜</span> "Shadow Growth & Shrink: Missed workouts strengthen the final boss, but extra effort shrinks its vitality."</li>
@@ -469,7 +469,20 @@ export default function App() {
   };
 
   const handleForgeOnwards = async () => {
-    if (nextVillainName.trim()) {
+    const config = JSON.parse(campaign.config);
+    const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
+    const threshold = totalWeeks - 1;
+    const enteringShadow = campaign.currentEnemyIndex >= threshold; // Index is already incremented
+
+    if (enteringShadow) {
+      try {
+        const { campaign: updated, summary } = await api.forgeAhead(campaign.id);
+        setCampaign(updated);
+        setResolutionData(summary);
+      } catch (e) {
+        console.error("Forge Ahead failed", e);
+      }
+    } else if (nextVillainName.trim()) {
       try {
         const updated = await api.renameEnemy(campaign.id, campaign.currentEnemyIndex, nextVillainName.trim(), nextVillainDesc.trim());
         if (updated) setCampaign(updated);
@@ -661,7 +674,7 @@ export default function App() {
   // GAME
   if (!campaign) return null; // Safety guard during transitions
 
-  const currentEnemy = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
+  const currentEnemy = (campaign.enemies || []).find((e: any) => !e.isDead && e.order >= (campaign.currentEnemyIndex || 0));
   const participants = campaign.participants;
   const config = JSON.parse(campaign.config);
 
@@ -1040,7 +1053,7 @@ export default function App() {
         activeTab === 'battle' && (
           <div className="animate-in slide-in-from-left">
             <section className="mb-10 max-w-3xl mx-auto">
-              {campaign.currentEnemyIndex >= campaign.enemies.length ? (
+              {!currentEnemy ? (
                 <div className="rpg-card p-12 md:p-16 text-center border-4 border-double border-yellow-600/30 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-2 bg-yellow-600/40"></div>
                   <div className="mb-8 text-6xl">🏆</div>
@@ -1091,7 +1104,7 @@ export default function App() {
                             Inspired
                           </div>
                         )}
-                        {p.isCursed && (
+                        {p.isCursed && !p.isBlessed && (
                           <div className="bg-[#1a1a1a] text-[#8b0000] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 shadow-md ring-2 ring-[#8b0000]/40 animate-pulse">
                             Cursed
                           </div>
@@ -1286,21 +1299,20 @@ export default function App() {
 
             <section className="mt-16 pt-12 border-t border-[#5c5346]/10 max-w-4xl mx-auto">
               <div className="text-center mb-8">
-                <div className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-30 mb-1">Current Expedition Progress</div>
-                <h3 className="text-2xl font-black uppercase tracking-tight opacity-60">Quest Summary</h3>
+                <div className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-30 mb-1 text-center">Quest Summary</div>
               </div>
               <div className="grid grid-cols-3 gap-8">
                 <div className="text-center">
-                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-2">Cycles Endured</div>
-                  <div className="text-3xl font-black">{campaign.currentWeek}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-1">Current Cycle</div>
+                  <div className="text-2xl font-bold opacity-60">{campaign.currentWeek}</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-2">Foes Vanquished</div>
-                  <div className="text-3xl font-black">{campaign.enemies.filter((e: any) => e.isDead).length}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-1">Foes Vanquished</div>
+                  <div className="text-2xl font-bold opacity-60">{campaign.currentEnemyIndex} / {campaign.enemies.length}</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-2">Fellowship Size</div>
-                  <div className="text-3xl font-black">{campaign.participants?.length || 0}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-1">Completion</div>
+                  <div className="text-2xl font-bold opacity-60">{Math.round((campaign.currentEnemyIndex / campaign.enemies.length) * 100)}%</div>
                 </div>
               </div>
             </section>
@@ -1383,21 +1395,23 @@ export default function App() {
                     >
                       ×
                     </button>
-                    {p.isInspired && (
-                      <div className="absolute -top-2 -left-2 bg-yellow-400 text-[#3a352f] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest -rotate-12 z-10 shadow-md ring-2 ring-yellow-200 animate-pulse">
-                        Inspired
-                      </div>
-                    )}
-                    {p.isBlessed && (
-                      <div className="absolute -top-2 -left-2 bg-gradient-to-br from-yellow-400 to-blue-500 text-white text-[8px] font-black px-2 py-0.5 uppercase tracking-widest -rotate-12 z-10 shadow-md ring-2 ring-blue-300 animate-pulse">
-                        Blessed
-                      </div>
-                    )}
-                    {p.isCursed && (
-                      <div className="absolute -top-2 -right-2 bg-[#1a1a1a] text-[#8b0000] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 z-10 shadow-md ring-2 ring-[#8b0000]/40 animate-pulse">
-                        Cursed
-                      </div>
-                    )}
+                    <div className="absolute -top-2 -right-2 flex flex-col items-end gap-1 z-10 pointer-events-none">
+                      {p.isBlessed && (
+                        <div className="bg-gradient-to-br from-yellow-400 to-blue-500 text-white text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 shadow-md ring-2 ring-blue-300 animate-pulse">
+                          Blessed
+                        </div>
+                      )}
+                      {p.isInspired && !p.isBlessed && (
+                        <div className="bg-yellow-400 text-[#3a352f] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 shadow-md ring-2 ring-yellow-200 animate-pulse">
+                          Inspired
+                        </div>
+                      )}
+                      {p.isCursed && !p.isBlessed && (
+                        <div className="bg-[#1a1a1a] text-[#8b0000] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 shadow-md ring-2 ring-[#8b0000]/40 animate-pulse">
+                          Cursed
+                        </div>
+                      )}
+                    </div>
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <h3 className="text-2xl font-black tracking-tighter leading-none">{p.name}</h3>

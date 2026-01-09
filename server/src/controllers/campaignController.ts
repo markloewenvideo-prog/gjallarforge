@@ -509,7 +509,7 @@ export const forgeAhead = async (req: Request, res: Response) => {
                             data: {
                                 campaignId: id,
                                 name: `The Shadow of ${miss.name}'s Failure`,
-                                description: "Shame! Shame! Shame!",
+                                description: `Spawned in Cycle ${campaign.currentWeek}. Shame! Shame! Shame!`,
                                 hp: 15,
                                 maxHp: 15,
                                 ac: 10,

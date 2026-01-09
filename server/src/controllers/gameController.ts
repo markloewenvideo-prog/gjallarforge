@@ -28,10 +28,21 @@ export const performAction = async (req: Request, res: Response) => {
             return;
         }
 
-        const currentEnemy = campaign.enemies.find(e => e.order === campaign.currentEnemyIndex);
-        if (!currentEnemy || currentEnemy.isDead) {
+        const currentEnemy = (campaign.enemies || [])
+            .filter((e: any) => !e.isDead && e.order >= campaign.currentEnemyIndex)
+            .sort((a: any, b: any) => a.order - b.order)[0];
+
+        if (!currentEnemy) {
             res.status(400).json({ error: 'No active enemy' });
             return;
+        }
+
+        // Ensure currentEnemyIndex is synced to this enemy's order if it was a gap
+        if (currentEnemy.order !== campaign.currentEnemyIndex) {
+            await prisma.campaign.update({
+                where: { id: campaignId },
+                data: { currentEnemyIndex: currentEnemy.order }
+            });
         }
 
         const participant = await prisma.participant.findUnique({
@@ -51,7 +62,7 @@ export const performAction = async (req: Request, res: Response) => {
         let modificationReason: string | null = null;
 
         // --- INSPIRED PROTECTION & CURSED HINDRANCE ---
-        if (rawD20 === 1 && participant.isInspired) {
+        if (rawD20 === 1 && (participant.isInspired || participant.isBlessed)) {
             rawD20 = 2; // Bump 1 to 2
             modificationReason = "inspiration";
         } else if (rawD20 === 20 && participant.isCursed) {
@@ -71,7 +82,7 @@ export const performAction = async (req: Request, res: Response) => {
         let isCrit = false;
         let isMiss = false;
 
-        const isShadowMonster = currentEnemy.hp <= 10 && currentEnemy.weaponDropTier === 0;
+        const isShadowMonster = currentEnemy.weaponDropTier === 0;
         const isFinalBoss = currentEnemy.order === (Number(JSON.parse(campaign.config).totalWeeks || 4) - 1);
 
         if (rawD20 === 20 || (rawD20 >= 2 && participant.isBlessed && isShadowMonster)) {
@@ -205,7 +216,7 @@ export const performAction = async (req: Request, res: Response) => {
                     if (p.totalWorkouts >= totalPossible) {
                         await prisma.participant.update({
                             where: { id: p.id },
-                            data: { isBlessed: true, isInspired: false }
+                            data: { isBlessed: true, isInspired: false, isCursed: false }
                         });
                     }
                 }
