@@ -129,8 +129,9 @@ export const createCampaign = async (req: Request, res: Response) => {
             else if (hp < 200) dropTier = 5;
             else dropTier = 10;
 
+            const isCustom = i === 0 && !!initialEnemy?.name;
             const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
-            const description = resultMonster.description + (isFinalBoss ? "" : ` Beware its ${spell}!`);
+            const description = (isCustom || isFinalBoss) ? resultMonster.description : (resultMonster.description + ` Beware its ${spell}!`);
 
             generatedMonsterData.push({
                 name: resultMonster.name,
