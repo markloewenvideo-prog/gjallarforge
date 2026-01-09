@@ -23,6 +23,8 @@ model Campaign {
   config       String 
   currentWeek  Int           @default(1)
   currentEnemyIndex Int      @default(0)
+  isCompleted  Boolean       @default(false)
+  isEndless    Boolean       @default(false)
   createdAt    DateTime      @default(now())
   participants Participant[]
   enemies      Enemy[]
@@ -45,6 +47,7 @@ model Participant {
   isInspired         Boolean @default(false)
   isCursed           Boolean @default(false)
   isBlessed          Boolean @default(false)
+  optedInToEndless   Boolean @default(false)
 
   // Fair Sweat Loot System fields
   bountyScore          Int      @default(0)

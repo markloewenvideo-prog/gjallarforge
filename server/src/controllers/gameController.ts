@@ -246,6 +246,22 @@ export const performAction = async (req: Request, res: Response) => {
                     }
                 });
             }
+
+            // --- FINAL COMPLETION CHECK ---
+            if (currentEnemy.order >= totalEnemies - 1) {
+                await prisma.campaign.update({
+                    where: { id: campaignId },
+                    data: { isCompleted: true }
+                });
+
+                await prisma.logEntry.create({
+                    data: {
+                        campaignId,
+                        type: 'system',
+                        content: JSON.stringify({ message: "EVENT_VICTORY: The Final Shadow has been banished. The Forge is triumphant!" })
+                    }
+                });
+            }
         }
 
         // Emit update

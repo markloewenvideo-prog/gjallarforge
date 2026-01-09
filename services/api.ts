@@ -158,5 +158,23 @@ export const api = {
         });
         if (!res.ok) throw await res.json();
         return res.json();
+    },
+
+    ascendCampaign: async (campaignId: string) => {
+        const res = await fetch(`${API_URL}/campaigns/${campaignId}/ascend`, {
+            method: 'POST'
+        });
+        if (!res.ok) throw await res.json();
+        return res.json();
+    },
+
+    optInToEndless: async (campaignId: string, participantId: string) => {
+        const res = await fetch(`${API_URL}/campaigns/${campaignId}/opt-in-endless`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ participantId })
+        });
+        if (!res.ok) throw await res.json();
+        return res.json();
     }
 };

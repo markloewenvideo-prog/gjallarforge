@@ -226,6 +226,31 @@ export default function App() {
     }
   }, [campaign?.id]);
 
+  // Shared Progress Report Detection
+  useEffect(() => {
+    if (campaign?.logs?.length > 0 && !resolutionData) {
+      const summaryLog = campaign.logs.find((l: any) =>
+        l.type === 'system' && l.content.includes('EVENT_WEEKLY_SUMMARY:')
+      );
+
+      if (summaryLog) {
+        let content;
+        try {
+          content = JSON.parse(summaryLog.content);
+        } catch (e) { return; }
+
+        const week = content.week;
+        const storageKey = `forge_seen_summary_${week}_${campaign.id}`;
+        const hasSeen = localStorage.getItem(storageKey);
+
+        if (!hasSeen) {
+          setResolutionData(content);
+          localStorage.setItem(storageKey, 'true');
+        }
+      }
+    }
+  }, [campaign?.logs, campaign?.id, resolutionData]);
+
   // --- Handlers ---
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
@@ -400,7 +425,6 @@ export default function App() {
   };
 
   const handleDeleteCampaign = async (idOrEvent?: string | React.MouseEvent) => {
-    // If it's a click event, ignore it and use the current campaign id
     const id = typeof idOrEvent === 'string' ? idOrEvent : undefined;
     const targetId = id || campaign?.id;
     if (!targetId) return;
@@ -410,33 +434,51 @@ export default function App() {
     try {
       const resp = await api.deleteCampaign(targetId);
       if (resp.success) {
-        // Close modal first to avoid zombie state
         setShowAbandonModal(false);
-
-        // If we deleted the campaign that is currently stored, clear it
         if (targetId === localStorage.getItem('forge_campaign_id')) {
           localStorage.removeItem('forge_campaign_id');
           localStorage.removeItem('forge_participant_id');
         }
-
-        if (targetId === campaign?.id) {
-          setCampaign(null);
-        }
-
-        // Refresh the list
+        if (targetId === campaign?.id) setCampaign(null);
         const list = await api.getAllCampaigns();
         setCampaignsList(list);
-
-        if (list.length === 0) {
-          setView('create');
-        } else if (view === 'game' && targetId === campaign?.id) {
-          // If we were inside the campaign we just deleted, and others remain, go to landing
-          setView('landing');
-        }
+        if (list.length === 0) setView('create');
+        else if (view === 'game' && targetId === campaign?.id) setView('landing');
       }
     } catch (e) {
       console.error("Delete failed", e);
       alert("The ritual of abandonment failed. The forge remains lit.");
+    }
+  };
+
+  const handleAscendCampaign = async () => {
+    if (!campaign?.id) return;
+    if (!window.confirm("The Fellowship has finished its quest, but the shadows are infinite. Ascend to Endless Mode? You will keep your levels and weapons, but face new, stronger horrors.")) return;
+
+    setIsSubmitting(true);
+    try {
+      const updated = await api.ascendCampaign(campaign.id);
+      setCampaign(updated);
+      setActiveTab('battle');
+      alert("The Forge is re-ignited! The journey continues forever...");
+    } catch (e) {
+      console.error("Ascend failed", e);
+      alert("The ritual of ascension failed. The gloom resists.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleOptInEndless = async (participantId: string) => {
+    if (!campaign?.id) return;
+    setIsSubmitting(true);
+    try {
+      const updated = await api.optInToEndless(campaign.id, participantId);
+      setCampaign(updated);
+    } catch (e) {
+      console.error("Opt-in failed", e);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1063,31 +1105,96 @@ export default function App() {
         activeTab === 'battle' && (
           <div className="animate-in slide-in-from-left">
             <section className="mb-10 max-w-3xl mx-auto">
-              {!currentEnemy ? (
+              {campaign.isCompleted ? (
                 <div className="rpg-card p-12 md:p-16 text-center border-4 border-double border-yellow-600/30 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-2 bg-yellow-600/40"></div>
-                  <div className="mb-8 text-6xl">🏆</div>
-                  <h2 className="text-5xl font-black uppercase tracking-tighter mb-4 text-yellow-700/80">Grand Finale</h2>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.5em] opacity-40 mb-8 pb-4 border-b border-[#5c5346]/10">The Forge is Triumphant</div>
+                  <div className="mb-4 text-6xl">🏆</div>
+                  <h2 className="text-5xl font-black uppercase tracking-tighter mb-4 text-yellow-700/80">Hall of Legends</h2>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.5em] opacity-40 mb-8 pb-4 border-b border-[#5c5346]/10">The Journey Concluded</div>
 
                   <p className="text-lg italic opacity-70 mb-12 max-w-lg mx-auto leading-relaxed">
-                    "Legends speak of a fellowship that dared to face every shadow, every beast, and every drop of sweat without fail. The Gjallar Forge burns eternally in your honor."
+                    "The Forge remembers every strike, every oath, and every drop of sweat. The Shadow has been banished, and your names are etched into the stone of GJALLAR forever."
                   </p>
 
-                  <div className="grid grid-cols-2 gap-8 mb-12 text-center">
-                    <div>
-                      <div className="text-[10px] font-bold uppercase opacity-30 mb-2">Cycles Endured</div>
-                      <div className="text-4xl font-black">{campaign.currentWeek}</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12 text-center">
+                    <div className="bg-white/40 p-4 rounded-sm border border-[#5c5346]/10">
+                      <div className="text-[10px] font-bold uppercase opacity-30 mb-1">Total Deeds</div>
+                      <div className="text-2xl font-black">{participants.reduce((sum: number, p: any) => sum + p.totalWorkouts, 0)}</div>
                     </div>
-                    <div>
-                      <div className="text-[10px] font-bold uppercase opacity-30 mb-2">Foes Vanquished</div>
-                      <div className="text-4xl font-black">{campaign.enemies.length}</div>
+                    <div className="bg-white/40 p-4 rounded-sm border border-[#5c5346]/10">
+                      <div className="text-[10px] font-bold uppercase opacity-30 mb-1">Foes Slayer</div>
+                      <div className="text-2xl font-black">{campaign.enemies.length}</div>
+                    </div>
+                    <div className="bg-white/40 p-4 rounded-sm border border-[#5c5346]/10">
+                      <div className="text-[10px] font-bold uppercase opacity-30 mb-1">Nat-20s Landed</div>
+                      <div className="text-2xl font-black">{participants.reduce((sum: number, p: any) => sum + (p.nat20Count || 0), 0)}</div>
+                    </div>
+                    <div className="bg-white/40 p-4 rounded-sm border border-[#5c5346]/10">
+                      <div className="text-[10px] font-bold uppercase opacity-30 mb-1">Highest Strike</div>
+                      <div className="text-2xl font-black">{Math.max(...participants.map((p: any) => p.highestSingleRoll || 0))}</div>
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-4 max-w-md mx-auto">
-                    <button onClick={handleExitCampaign} className="w-full py-5 button-ink text-sm font-black uppercase tracking-widest">Return to Titles</button>
-                    <button onClick={() => setShowAbandonModal(true)} className="w-full py-3 button-red-hollow text-[10px]">Ash the Progress (Start Anew)</button>
+                  <div className="space-y-4 mb-12">
+                    <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-4">The Eternal Choice</h4>
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#8b0000] mb-6 animate-pulse">
+                      "We go together or we don't go at all."
+                    </p>
+                    <div className="grid gap-3">
+                      {participants.map((p: any) => {
+                        const isMe = p.id === localStorage.getItem('forge_participant_id');
+                        return (
+                          <div key={p.id} className="flex justify-between items-center bg-[#3a352f]/5 p-4 border-l-4 border-[#3a352f]">
+                            <div className="text-left">
+                              <div className="text-lg font-black uppercase tracking-tight">{p.name}</div>
+                              <div className="text-[10px] font-bold opacity-40 uppercase">{getLevelTitle(p.level)}</div>
+                            </div>
+                            <div className="text-right">
+                              {p.optedInToEndless ? (
+                                <div className="flex items-center gap-2 text-green-700 font-bold uppercase text-[10px] tracking-widest">
+                                  <span>Ready to Ascend</span>
+                                  <span className="text-lg">✓</span>
+                                </div>
+                              ) : isMe ? (
+                                <button
+                                  onClick={() => handleOptInEndless(p.id)}
+                                  disabled={isSubmitting}
+                                  className="py-2 px-6 bg-[#3a352f] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-[#8b0000] transition-colors shadow-sm disabled:opacity-50"
+                                >
+                                  {isSubmitting ? "Opting In..." : "Opt In to Endless"}
+                                </button>
+                              ) : (
+                                <div className="text-[10px] font-bold uppercase opacity-30 tracking-widest italic">
+                                  Contemplating the Gloom...
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-3 max-w-sm mx-auto">
+                    {participants.every((p: any) => p.optedInToEndless) && (
+                      <div className="text-[10px] font-black uppercase tracking-[0.3em] text-green-700 mb-2">
+                        The Fellowship is United. Ascension Imminent.
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handleExitCampaign}
+                      className="w-full py-4 button-hollow text-xs font-bold uppercase tracking-widest opacity-60 hover:opacity-100"
+                    >
+                      Retire to the Hall of Records
+                    </button>
+
+                    <button
+                      onClick={() => setShowAbandonModal(true)}
+                      className="w-full py-2 text-[8px] font-bold uppercase tracking-[0.3em] text-[#8b0000] opacity-40 hover:opacity-100 transition-opacity"
+                    >
+                      Ash this Legend (Delete Forever)
+                    </button>
                   </div>
                 </div>
               ) : currentEnemy && !currentEnemy.isDead ? (
@@ -1160,6 +1267,8 @@ export default function App() {
                 {campaign.logs.map((log: any, idx: number) => {
                   let content: any;
                   try { content = JSON.parse(log.content); } catch { content = {}; }
+                  // Skip weekly summary logs in the list (already handled as popups)
+                  if (log.type === 'system' && content.message === 'EVENT_WEEKLY_SUMMARY:') return null;
                   const timeStr = new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                   // Milestone: VANQUISHED
@@ -1325,16 +1434,22 @@ export default function App() {
               </div>
               <div className="grid grid-cols-3 gap-8">
                 <div className="text-center">
-                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-1">Current Cycle</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-1">
+                    {campaign.isEndless ? "Current Week" : "Cycle Week"}
+                  </div>
                   <div className="text-2xl font-bold opacity-60">{campaign.currentWeek}</div>
                 </div>
                 <div className="text-center">
                   <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-1">Foes Vanquished</div>
-                  <div className="text-2xl font-bold opacity-60">{campaign.currentEnemyIndex} / {campaign.enemies.length}</div>
+                  <div className="text-2xl font-bold opacity-60">{campaign.currentEnemyIndex}</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-1">Completion</div>
-                  <div className="text-2xl font-bold opacity-60">{Math.round((campaign.currentEnemyIndex / campaign.enemies.length) * 100)}%</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-1">
+                    {campaign.isEndless ? "Eternal Status" : "Completion"}
+                  </div>
+                  <div className="text-2xl font-bold opacity-60">
+                    {campaign.isEndless ? "∞" : `${Math.round((campaign.currentEnemyIndex / campaign.enemies.length) * 100)}%`}
+                  </div>
                 </div>
               </div>
             </section>
@@ -1476,16 +1591,22 @@ export default function App() {
               <div className="text-[10px] font-bold uppercase opacity-40 tracking-[0.4em] mb-4">Quest Summary</div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <div className="text-[10px] font-bold uppercase opacity-30 mb-1">Current Cycle</div>
+                  <div className="text-[10px] font-bold uppercase opacity-30 mb-1">
+                    {campaign.isEndless ? "Cycle Week" : "Current Week"}
+                  </div>
                   <div className="text-2xl font-bold opacity-60">{campaign.currentWeek}</div>
                 </div>
                 <div>
                   <div className="text-[10px] font-bold uppercase opacity-30 mb-1">Foes Vanquished</div>
-                  <div className="text-2xl font-bold opacity-60">{campaign.currentEnemyIndex} / {campaign.enemies.length}</div>
+                  <div className="text-2xl font-bold opacity-60">{campaign.currentEnemyIndex}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase opacity-30 mb-1">Completion</div>
-                  <div className="text-2xl font-bold opacity-60">{Math.round((campaign.currentEnemyIndex / campaign.enemies.length) * 100)}%</div>
+                  <div className="text-[10px] font-bold uppercase opacity-30 mb-1">
+                    {campaign.isEndless ? "Eternal Status" : "Completion"}
+                  </div>
+                  <div className="text-2xl font-bold opacity-60">
+                    {campaign.isEndless ? "∞" : `${Math.round((campaign.currentEnemyIndex / campaign.enemies.length) * 100)}%`}
+                  </div>
                 </div>
               </div>
             </div>

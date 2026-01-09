@@ -182,7 +182,6 @@ export const createCampaign = async (req: Request, res: Response) => {
                 logs: {
                     create: [
                         { type: 'system', content: JSON.stringify({ message: `The Forge is lit for ${name}. The journey begins.` }) },
-                        { type: 'system', content: JSON.stringify({ message: `A New Threat Emerges: ${(initialEnemy as any)?.name || 'The First Shadow'}` }) },
                         ...(generatedMonsterData.length > 0 ? [{
                             type: 'system',
                             content: JSON.stringify({
@@ -672,7 +671,20 @@ export const forgeAhead = async (req: Request, res: Response) => {
             }
         });
 
-        await prisma.$transaction([...participantUpdates, ...statusLogs, campaignUpdate]);
+        // 5. Generate Weekly Summary Log (Shared with all players)
+        const summaryLog = prisma.logEntry.create({
+            data: {
+                campaignId: id,
+                type: 'system',
+                content: JSON.stringify({
+                    message: `EVENT_WEEKLY_SUMMARY:`,
+                    ...summary,
+                    week: campaign.currentWeek
+                })
+            }
+        });
+
+        await prisma.$transaction([...participantUpdates, ...statusLogs, campaignUpdate, summaryLog]);
 
         const updatedCampaign = await prisma.campaign.findUnique({
             where: { id },
@@ -786,6 +798,189 @@ export const renameEnemy = async (req: Request, res: Response) => {
         res.json(updatedCampaign);
     } catch (error) {
         console.error('Rename enemy error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+export const ascendCampaign = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const campaign = await prisma.campaign.findUnique({
+            where: { id },
+            include: {
+                participants: true,
+                enemies: { orderBy: { order: 'desc' }, take: 1 }
+            }
+        });
+
+        if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+        if (!campaign.isCompleted) return res.status(400).json({ error: "Only a completed quest may ascend." });
+
+        const config = JSON.parse(campaign.config);
+        const workoutsPerWeek = Number(config.workoutsPerWeek || 3);
+        const cycleWeeks = Math.max(1, Number(config.totalWeeks || config.weeks || 4));
+        const numParticipants = campaign.participants.length;
+
+        // --- ENDLESS HP SCALING MODEL ---
+        const startOrder = (campaign.enemies[0]?.order ?? 0) + 1;
+
+        // Use average party power as the baseline
+        const avgLevel = campaign.participants.reduce((sum, p) => sum + p.level, 0) / numParticipants;
+        const avgWeaponMod = campaign.participants.reduce((sum, p) => sum + calculateAvgWeaponDamage(p.weaponTier), 0) / numParticipants;
+
+        const T = cycleWeeks * workoutsPerWeek;
+        const efficiencyFactor = 0.9;
+        const difficultyMultiplier = 1.35; // Endless mode is harder
+        const instakillBurnFactor = 18 / 20;
+
+        let totalHPBurn = 0;
+        for (let t = 0; t < T; t++) {
+            const weekInCycle = Math.floor(t / workoutsPerWeek);
+            const levelAtAttack = avgLevel + weekInCycle;
+            const weaponModAtAttack = avgWeaponMod + Math.floor(weekInCycle / 2);
+            const expectedDamage = (10.5 + levelAtAttack + weaponModAtAttack);
+            totalHPBurn += expectedDamage * instakillBurnFactor;
+        }
+        const cycleHPBudget = Math.ceil(totalHPBurn * numParticipants * efficiencyFactor * difficultyMultiplier);
+
+        const expectedInstakills = (numParticipants * T) * (1 / 20);
+        let numNormalEnemies = Math.max(cycleWeeks, Math.round(expectedInstakills / 0.2));
+        numNormalEnemies = Math.min(numNormalEnemies, cycleWeeks * 4);
+        const totalNewEnemies = numNormalEnemies + 1;
+
+        const bossHP = Math.ceil(cycleHPBudget * 0.3);
+        const normalHPPool = cycleHPBudget - bossHP;
+
+        const b = 1.25; // Sharper growth
+        const offset = avgLevel + 15;
+
+        let a = 0;
+        if (numNormalEnemies > 0) {
+            const denominator = Math.pow(b, numNormalEnemies) - 1;
+            if (denominator > 0) {
+                a = Math.max(0, (normalHPPool - (numNormalEnemies * offset)) * (b - 1) / denominator);
+            }
+        }
+
+        const newEnemies = [];
+        for (let i = 0; i < totalNewEnemies; i++) {
+            const isBoss = i === totalNewEnemies - 1;
+            const hp = isBoss ? Math.max(bossHP, 120) : Math.ceil(a * Math.pow(b, i) + offset);
+
+            const pool = isBoss ? MONSTER_TIERS.BOSS : (i < totalNewEnemies / 2 ? MONSTER_TIERS.MEDIUM : MONSTER_TIERS.HARD);
+            const subPool = Math.random() > 0.5 ? pool.funny : pool.regular;
+            const monster = subPool[Math.floor(Math.random() * subPool.length)];
+
+            let name = monster.name;
+            if (isBoss && !name.startsWith("The Shadow of")) {
+                name = `The Shadow of ${name}`;
+            }
+
+            const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
+
+            newEnemies.push({
+                campaignId: id,
+                name,
+                description: monster.description + (isBoss ? "" : ` Beware its ${spell}!`),
+                hp: hp,
+                maxHp: hp,
+                ac: 10 + Math.floor(avgLevel / 8),
+                level: Math.floor(avgLevel + (i / totalNewEnemies) * cycleWeeks) + 1,
+                type: isBoss ? 'BOSS' : 'REGULAR',
+                weaponDropTier: isBoss ? Math.min(10, Math.floor(avgLevel / 10) + 1) : Math.min(5, Math.floor(avgLevel / 15) + 1),
+                order: startOrder + i,
+                isDead: false
+            });
+        }
+
+        await prisma.$transaction([
+            prisma.campaign.update({
+                where: { id },
+                data: {
+                    isCompleted: false,
+                    isEndless: true,
+                    currentWeek: 1,
+                    participants: {
+                        updateMany: {
+                            where: { campaignId: id },
+                            data: { optedInToEndless: false }
+                        }
+                    }
+                }
+            }),
+            prisma.enemy.createMany({ data: newEnemies }),
+            prisma.logEntry.create({
+                data: {
+                    campaignId: id,
+                    type: 'system',
+                    content: JSON.stringify({ message: "EVENT_ASCENSION: The Fellowship has ascended to Endless Mode! The light of the Forge burns through the deepening gloom." })
+                }
+            })
+        ]);
+
+        const updated = await prisma.campaign.findUnique({
+            where: { id },
+            include: {
+                participants: { orderBy: { id: 'asc' } },
+                enemies: { orderBy: { order: 'asc' } },
+                logs: { orderBy: { timestamp: 'desc' }, take: 50 }
+            }
+        });
+
+        const io = getIO();
+        if (updated) io.to(id).emit('gamestate_update', updated);
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Ascend error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+export const optInToEndless = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { participantId } = req.body;
+
+        if (!participantId) return res.status(400).json({ error: "Participant ID required" });
+
+        const participant = await prisma.participant.update({
+            where: { id: participantId },
+            data: { optedInToEndless: true }
+        });
+
+        // Check if everyone has opted in
+        const allParticipants = await prisma.participant.findMany({
+            where: { campaignId: id }
+        });
+
+        const allOptedIn = allParticipants.every(p => p.optedInToEndless);
+
+        if (allOptedIn) {
+            // Trigger ascension logic (internal call or refactor needed? For now just call the existing logic)
+            // But we already have ascendCampaign as a separate endpoint.
+            // Requirement says: "if all character buttons... are pressed does it go to endless mode."
+            // So we can just trigger the same logic here.
+
+            // Re-using the logic from ascendCampaign
+            return ascendCampaign(req, res);
+        }
+
+        const updated = await prisma.campaign.findUnique({
+            where: { id },
+            include: {
+                participants: { orderBy: { id: 'asc' } },
+                enemies: { orderBy: { order: 'asc' } },
+                logs: { orderBy: { timestamp: 'desc' }, take: 50 }
+            }
+        });
+
+        const io = getIO();
+        if (updated) io.to(id).emit('gamestate_update', updated);
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Opt-in error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
