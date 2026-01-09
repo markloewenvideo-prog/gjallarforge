@@ -38,13 +38,13 @@ const KragCommandments: React.FC<{ onClose?: () => void; noMargin?: boolean }> =
       )}
       <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest mb-8 border-b-2 border-[#5c5346] pb-2 text-center">Krag’s Commandments</h2>
       <ul className="space-y-4 text-sm md:text-base italic font-medium leading-relaxed opacity-90 max-w-xl mx-auto">
-        <li className="flex gap-4"><span>⚔️</span> "Every drop of sweat counts. Every workout always strikes the foe, unless the fates (d20) fumble."</li>
+        <li className="flex gap-4"><span>📜</span> "Every drop of sweat counts. Every workout always strikes the foe, unless the fates (d20) fumble."</li>
         <li className="flex gap-4"><span>📜</span> "Damage is a simple sum of your effort: Roll d20 + Your Strength (Level) + Weapon Modifier."</li>
-        <li className="flex gap-4 text-[#8b0000] font-black"><span>💀</span> "A Natural 20 is an INSTANT KILL! The foe falls immediately, and you earn an extra Pip!"</li>
-        <li className="flex gap-4 opacity-50"><span>💨</span> "A Natural 1 is a Total Miss. You deal 0 damage this strike."</li>
-        <li className="flex gap-4"><span>✨</span> "Inspired Heroes (Gold) have gone above and beyond. Do extra workouts to earn this blessing."</li>
-        <li className="flex gap-4 text-[#8b0000]"><span>🌑</span> "Shadow Growth & Shrink: Missed workouts strengthen the final boss, but extra effort shrinks its vitality."</li>
-        <li className="flex gap-4"><span>💎</span> "When a foe falls, the one with the highest total D20 rolls (The Fair Sweat Rule) claims the loot."</li>
+        <li className="flex gap-4 text-[#8b0000] font-black"><span>📜</span> "A Natural 20 is an INSTANT KILL! The foe falls immediately, and you earn an extra Pip!"</li>
+        <li className="flex gap-4 opacity-50"><span>📜</span> "A Natural 1 is a Total Miss. You deal 0 damage this strike."</li>
+        <li className="flex gap-4"><span>📜</span> "Inspired Heroes (Gold) have gone above and beyond. Do extra workouts to earn this blessing."</li>
+        <li className="flex gap-4 text-[#8b0000]"><span>📜</span> "Shadow Growth & Shrink: Missed workouts strengthen the final boss, but extra effort shrinks its vitality."</li>
+        <li className="flex gap-4"><span>📜</span> "When a foe falls, the one with the highest total D20 rolls (The Fair Sweat Rule) claims the loot."</li>
         <li className="flex gap-4 font-black uppercase tracking-tighter not-italic mt-6 text-[#3a352f] justify-center text-lg md:text-xl border-t border-[#5c5346]/10 pt-4 text-center">"Now back to work."</li>
       </ul>
     </div>
@@ -375,25 +375,26 @@ export default function App() {
     try {
       const resp = await api.deleteCampaign(targetId);
       if (resp.success) {
-        if (targetId === campaign?.id) {
+        // If we deleted the campaign that is currently stored, clear it
+        if (targetId === localStorage.getItem('forge_campaign_id')) {
           localStorage.removeItem('forge_campaign_id');
           localStorage.removeItem('forge_participant_id');
+        }
+
+        if (targetId === campaign?.id) {
           setCampaign(null);
         }
 
-        // Refresh the list if we're on the landing page
-        if (view === 'landing') {
-          const list = await api.getAllCampaigns();
-          setCampaignsList(list);
-          if (list.length === 0) setView('create');
-        } else {
-          // If we were inside the campaign we just deleted
+        // Refresh the list
+        const list = await api.getAllCampaigns();
+        setCampaignsList(list);
+
+        if (list.length === 0) {
+          setView('create');
+        } else if (view === 'game' && targetId === campaign?.id) {
+          // If we were inside the campaign we just deleted, and others remain, go to landing
           setShowAbandonModal(false);
           setView('landing');
-          api.getAllCampaigns().then(list => {
-            setCampaignsList(list);
-            if (list.length === 0) setView('create');
-          });
         }
       }
     } catch (e) {

@@ -331,11 +331,13 @@ export const deleteCampaign = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
 
-        // Manual Cascade Delete for SQLite without foreign key cascades
-        await prisma.logEntry.deleteMany({ where: { campaignId: id } });
-        await prisma.enemy.deleteMany({ where: { campaignId: id } });
-        await prisma.participant.deleteMany({ where: { campaignId: id } });
-        await prisma.campaign.delete({ where: { id } });
+        // Manual Cascade Delete for SQLite/Postgres without foreign key cascades
+        await prisma.$transaction([
+            prisma.logEntry.deleteMany({ where: { campaignId: id } }),
+            prisma.enemy.deleteMany({ where: { campaignId: id } }),
+            prisma.participant.deleteMany({ where: { campaignId: id } }),
+            prisma.campaign.delete({ where: { id } })
+        ]);
 
         res.json({ success: true });
     } catch (error) {
