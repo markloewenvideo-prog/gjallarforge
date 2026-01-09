@@ -99,25 +99,38 @@ export const createCampaign = async (req: Request, res: Response) => {
                 enemies: {
                     create: generatedMonsterData.map((data: any, i: number) => {
                         const isFinalBoss = i === totalWeeks - 1;
-                        const dropTier = 1 + Math.floor(i * 9 / Math.max(1, totalWeeks - 1));
-
                         let hp;
-                        if (isFinalBoss) {
-                            const totalCampaignWorkouts = participantsData.length * workoutsPerWeek * totalWeeks;
-                            const avgDamagePerHit = 10.5 + totalWeeks + calculateAvgWeaponDamage(Math.floor(totalWeeks * 9 / totalWeeks));
-                            hp = Math.ceil(totalCampaignWorkouts * 0.30 * avgDamagePerHit * 1.5);
-                        } else if (totalWeeks === 1) {
-                            hp = 50;
+
+                        // Dynamic calculation based on expected weekly damage
+                        const weeklyDamage = calculateExpectedWeeklyDamage(participantsData.length, workoutsPerWeek);
+                        const firstHP = Math.max(10, Math.ceil(weeklyDamage * 0.8)); // Week 1 foe takes ~80% of a perfect week
+
+                        if (totalWeeks === 1) {
+                            // If it's a 1-week sprint, the boss should be beefy
+                            hp = Math.ceil(weeklyDamage * 2.5);
                         } else {
-                            const startHP = 10;
-                            const endHP = 200;
-                            if (totalWeeks === 2) {
-                                hp = startHP;
-                            } else {
-                                const r = Math.pow(endHP / startHP, 1 / (totalWeeks - 2));
-                                hp = Math.ceil(startHP * Math.pow(r, i));
-                            }
+                            // Exponential growth factor
+                            // Final boss should have roughly (totalWeeks * 1.5) times more HP than the first foe
+                            // but at least 5x and capped at something reasonable if extremely long
+                            const totalGrowth = Math.max(5, totalWeeks * 1.5);
+                            const growthPerWeek = Math.pow(totalGrowth, 1 / (totalWeeks - 1));
+                            hp = Math.ceil(firstHP * Math.pow(growthPerWeek, i));
                         }
+
+                        // Apply a multiplier for the final boss to make it "significantly" higher
+                        if (isFinalBoss && totalWeeks > 1) {
+                            hp = Math.ceil(hp * 1.5);
+                        }
+
+                        const finalHP = Math.max(10, hp);
+
+                        let dropTier = 0;
+                        if (finalHP < 15) dropTier = 1;
+                        else if (finalHP < 55) dropTier = 2;
+                        else if (finalHP < 105) dropTier = 3;
+                        else if (finalHP < 155) dropTier = 4;
+                        else if (finalHP < 250) dropTier = 5;
+                        else dropTier = 10;
 
                         const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
                         const description = (i === 0 && initialEnemy) ? data.description : `${data.description} Beware its ${spell}!`;
@@ -125,8 +138,8 @@ export const createCampaign = async (req: Request, res: Response) => {
                         return {
                             name: data.name,
                             description,
-                            hp: Math.max(7, hp),
-                            maxHp: Math.max(7, hp),
+                            hp: finalHP,
+                            maxHp: finalHP,
                             ac: 10,
                             weaponDropTier: dropTier,
                             order: i,
@@ -137,6 +150,7 @@ export const createCampaign = async (req: Request, res: Response) => {
                 logs: {
                     create: [
                         { type: 'system', content: JSON.stringify({ message: `The Forge is lit for ${name}. The journey begins.` }) },
+                        { type: 'system', content: JSON.stringify({ message: `A New Threat Emerges: ${(initialEnemy as any)?.name || 'The First Shadow'}` }) },
                         ...(generatedMonsterData.length > 0 ? [{
                             type: 'system',
                             content: JSON.stringify({
@@ -456,18 +470,25 @@ export const forgeAhead = async (req: Request, res: Response) => {
             }));
         });
 
-        // 3. Shadow Growth (Missed Oaths spawn monsters) & Shrink Logic (Collective)
-        const netMisses = summary.totalMisses - summary.totalExtras; // (Sum Goals) - (Sum Actual)
+        const missesPerPlayer: { name: string, count: number }[] = [];
+        const extrasPerPlayer: { name: string, count: number }[] = [];
 
-        if (netMisses > 0) {
-            // SHADOW GROWTH: Spawn monsters
-            summary.shadowMonstersSpawned = netMisses;
+        campaign.participants.forEach(p => {
+            if (p.workoutsThisWeek < oathGoal) {
+                missesPerPlayer.push({ name: p.name, count: oathGoal - p.workoutsThisWeek });
+            } else if (p.workoutsThisWeek > oathGoal) {
+                extrasPerPlayer.push({ name: p.name, count: p.workoutsThisWeek - oathGoal });
+            }
+        });
 
-            const shadowPool = MONSTER_TIERS.SHADOW;
+        const netMisses = summary.totalMisses - summary.totalExtras;
+        summary.netMisses = netMisses;
+
+        if (missesPerPlayer.length > 0) {
+            // THE SHADOW GROWS: Spawn monsters
+            summary.shadowMonstersSpawned = summary.totalMisses;
+
             const finalBoss = await prisma.enemy.findFirst({
-                where: { campaignId: id, order: (totalWeeks * 3) + 1000 }, // Dummy high but we'll find the max
-                orderBy: { order: 'desc' }
-            }) || await prisma.enemy.findFirst({
                 where: { campaignId: id },
                 orderBy: { order: 'desc' }
             });
@@ -475,29 +496,30 @@ export const forgeAhead = async (req: Request, res: Response) => {
             if (finalBoss) {
                 const bossOrder = finalBoss.order;
 
-                // Shift boss order up by netMisses
+                // Shift boss order up by totalMisses
                 await prisma.enemy.update({
                     where: { id: finalBoss.id },
-                    data: { order: bossOrder + netMisses }
+                    data: { order: bossOrder + summary.totalMisses }
                 });
 
-                // Create new shadow monsters in the gap
-                for (let i = 0; i < netMisses; i++) {
-                    const data = (Math.random() > 0.5 ? shadowPool.funny : shadowPool.regular)[Math.floor(Math.random() * shadowPool.regular.length)];
-
-                    await prisma.enemy.create({
-                        data: {
-                            campaignId: id,
-                            name: data.name,
-                            description: data.description,
-                            hp: 10,
-                            maxHp: 10,
-                            ac: 10,
-                            weaponDropTier: 0,
-                            order: bossOrder + i,
-                            isDead: false
-                        }
-                    });
+                let spawnedCount = 0;
+                for (const miss of missesPerPlayer) {
+                    for (let i = 0; i < miss.count; i++) {
+                        await prisma.enemy.create({
+                            data: {
+                                campaignId: id,
+                                name: `The Shadow of ${miss.name}'s Failure`,
+                                description: "Shame! Shame! Shame!",
+                                hp: 15,
+                                maxHp: 15,
+                                ac: 10,
+                                weaponDropTier: 0,
+                                order: bossOrder + spawnedCount,
+                                isDead: false
+                            }
+                        });
+                        spawnedCount++;
+                    }
                 }
 
                 await prisma.logEntry.create({
@@ -505,33 +527,9 @@ export const forgeAhead = async (req: Request, res: Response) => {
                         campaignId: id,
                         type: 'system',
                         content: JSON.stringify({
-                            message: `SHADOW_GROWTH: ${netMisses} Shadow Monsters have manifested from your missed Oaths! They stand between you and the final shadow.`
+                            message: `A New Threat Emerges: The Shadows of Failure have manifested!`,
                         })
                     }
-                });
-            }
-        } else if (netMisses < 0) {
-            // SHADOW SHRINK: Still affects final boss HP
-            const penaltyPerWorkout = 15 + totalWeeks;
-            const hpAdjustment = netMisses * penaltyPerWorkout; // Negative
-            summary.shadowShrinkHP = Math.abs(hpAdjustment);
-
-            const finalBoss = await prisma.enemy.findFirst({
-                where: { campaignId: id },
-                orderBy: { order: 'desc' }
-            });
-
-            if (finalBoss && !finalBoss.isDead) {
-                const newHP = Math.max(1, finalBoss.hp + hpAdjustment);
-                const newMaxHP = Math.max(1, finalBoss.maxHp + hpAdjustment);
-
-                await prisma.enemy.update({
-                    where: { id: finalBoss.id },
-                    data: {
-                        hp: newHP,
-                        maxHp: newMaxHP,
-                        adjustmentHp: { increment: hpAdjustment }
-                    } as any
                 });
 
                 await prisma.logEntry.create({
@@ -539,11 +537,106 @@ export const forgeAhead = async (req: Request, res: Response) => {
                         campaignId: id,
                         type: 'system',
                         content: JSON.stringify({
-                            message: `SHADOW_RECEDES: The fellowship's zeal burns the darkness, stripping ${Math.abs(hpAdjustment)} HP from the final foe.`
+                            message: `THE_SHADOW_GROWS: ${summary.totalMisses} Shadow Monsters have manifested from missed Oaths! They stand between you and the final shadow.`
                         })
                     }
                 });
             }
+        }
+        if (summary.totalExtras > 0) {
+            let numToBanish = summary.totalExtras;
+            let totalBanishedCount = 0;
+
+            // 1. Prioritize banishing player-specific "Failure" monsters
+            for (const extra of extrasPerPlayer) {
+                if (numToBanish <= 0) break;
+
+                const myMonsters = await prisma.enemy.findMany({
+                    where: {
+                        campaignId: id,
+                        isDead: false,
+                        name: `The Shadow of ${extra.name}'s Failure`
+                    },
+                    orderBy: { order: 'asc' }, // Banish their own failures first
+                    take: Math.min(extra.count, numToBanish)
+                });
+
+                if (myMonsters.length > 0) {
+                    const count = myMonsters.length;
+                    const monsterIds = myMonsters.map(m => m.id);
+                    await prisma.enemy.deleteMany({ where: { id: { in: monsterIds } } });
+                    numToBanish -= count;
+                    totalBanishedCount += count;
+                }
+            }
+
+            // 2. Banish earliest created shadow monsters (HP 10, Tier 0)
+            if (numToBanish > 0) {
+                const globalMonsters = await prisma.enemy.findMany({
+                    where: {
+                        campaignId: id,
+                        isDead: false,
+                        hp: 15,
+                        weaponDropTier: 0
+                    },
+                    orderBy: { order: 'asc' }, // Earliest first
+                    take: numToBanish
+                });
+
+                if (globalMonsters.length > 0) {
+                    const count = globalMonsters.length;
+                    const monsterIds = globalMonsters.map(m => m.id);
+                    await prisma.enemy.deleteMany({ where: { id: { in: monsterIds } } });
+                    numToBanish -= count;
+                    totalBanishedCount += count;
+                }
+            }
+
+            // Re-adjust boss order
+            const finalBoss = await prisma.enemy.findFirst({
+                where: { campaignId: id },
+                orderBy: { order: 'desc' }
+            });
+            if (finalBoss && totalBanishedCount > 0) {
+                await prisma.enemy.update({
+                    where: { id: finalBoss.id },
+                    data: { order: { decrement: totalBanishedCount } }
+                });
+            }
+
+            summary.shadowMonstersBanished = totalBanishedCount;
+            const remainingZeal = numToBanish;
+
+            if (remainingZeal > 0) {
+                // Apply remaining zeal to boss HP
+                const penaltyPerWorkout = 15 + totalWeeks;
+                const hpAdjustment = -(remainingZeal * penaltyPerWorkout);
+                summary.shadowShrinkHP = Math.abs(hpAdjustment);
+
+                if (finalBoss && !finalBoss.isDead) {
+                    const newHP = Math.max(1, finalBoss.hp + hpAdjustment);
+                    const newMaxHP = Math.max(1, finalBoss.maxHp + hpAdjustment);
+
+                    await prisma.enemy.update({
+                        where: { id: finalBoss.id },
+                        data: {
+                            hp: newHP,
+                            maxHp: newMaxHP,
+                            adjustmentHp: { increment: hpAdjustment }
+                        } as any
+                    });
+                }
+            }
+
+            await prisma.logEntry.create({
+                data: {
+                    campaignId: id,
+                    type: 'system',
+                    content: JSON.stringify({
+                        message: `THE_SHADOW_RECEDES: The fellowship's zeal quells the darkness, banishing ${totalBanishedCount} horrors and weakening the final foe.`
+                    })
+                }
+            });
         }
 
         // 4. Update Campaign Week
@@ -650,7 +743,7 @@ export const renameEnemy = async (req: Request, res: Response) => {
                 campaignId: id,
                 type: 'system',
                 content: JSON.stringify({
-                    message: `EVENT_ENEMYNAMED:${updated.name}`,
+                    message: `A New Threat Emerges: ${updated.name}`,
                     enemyName: updated.name,
                     description: updated.description
                 })

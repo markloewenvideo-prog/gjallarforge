@@ -42,9 +42,13 @@ const KragCommandments: React.FC<{ onClose?: () => void; noMargin?: boolean }> =
         <li className="flex gap-4"><span>📜</span> "Damage is a simple sum of your effort: Roll d20 + Your Strength (Level) + Weapon Modifier."</li>
         <li className="flex gap-4 text-[#8b0000] font-black"><span>📜</span> "A Natural 20 is an INSTANT KILL! The foe falls immediately."</li>
         <li className="flex gap-4 opacity-50"><span>📜</span> "A Natural 1 is a Total Miss. You deal 0 damage this strike."</li>
-        <li className="flex gap-4"><span>📜</span> "Inspired Heroes (Gold) have gone above and beyond. Do extra workouts to earn this blessing."</li>
+        <li className="flex gap-4"><span>📜</span> "Inspired Heroes (Gold) have gone above and beyond. Do extra workouts to earn this blessing. Their zeal prevents total failure; a Natural 1 is automatically bumped to a 2."</li>
+        <li className="flex gap-4 text-yellow-600 font-bold"><span>📜</span> "Blessed Heroes (Gold/Blue) have kept every Oath until the threshold of the Shadow Realm. In the darkness, their light is true: any strike against a Shadow Monster is an INSTANT KILL (d2-d20)."</li>
+        <li className="flex gap-4 text-[#8b0000]"><span>📜</span> "Cursed Heroes (Black) have neglected their Oaths. The shadows weigh on their strikes; a Natural 20 is automatically bumped down to a 19. Yet, even in darkness, they may claim glory and loot."</li>
+        <li className="flex gap-4 text-[#8b0000] font-black"><span>📜</span> "The Shadow of... (Final Boss) is resilient. A Natural 20 deals DOUBLE DAMAGE rather than an instant kill."</li>
+        <li className="flex gap-4"><span>📜</span> "When a foe falls, the one with the highest total D20 rolls (The Fair Sweat Rule) claims the loot. The quality of the loot reflects the foe's vitality (HP)."</li>
+        <li className="flex gap-4 opacity-70"><span>📜</span> "A Hero may only carry one armament of a kind. If the swiftest hunter already bears a superior blade, the spoils flow to the next in merit."</li>
         <li className="flex gap-4 text-[#8b0000]"><span>📜</span> "Shadow Growth & Shrink: Missed workouts strengthen the final boss, but extra effort shrinks its vitality."</li>
-        <li className="flex gap-4"><span>📜</span> "When a foe falls, the one with the highest total D20 rolls (The Fair Sweat Rule) claims the loot."</li>
         <li className="flex gap-4 font-black uppercase tracking-tighter not-italic mt-6 text-[#3a352f] justify-center text-lg md:text-xl border-t border-[#5c5346]/10 pt-4 text-center">"Now back to work."</li>
       </ul>
     </div>
@@ -62,7 +66,7 @@ const EnemyDisplay: React.FC<{ enemy: any }> = ({ enemy }) => {
       <div className="rpg-card dashed-card p-6 md:p-8 text-left bg-[#fdf6e3]/50 relative overflow-hidden">
         {adj !== 0 && (
           <div className={`absolute top-0 right-0 py-1 px-4 text-[9px] font-black uppercase tracking-widest rotate-0 z-10 shadow-sm border-l border-b ${adj > 0 ? 'bg-[#8b0000] text-[#fdf6e3] border-[#8b0000]/20' : 'bg-green-700 text-[#fdf6e3] border-green-700/20'}`}>
-            {adj > 0 ? `+${adj} Shadow Growth` : `${adj} Shadow Shrink`}
+            {adj > 0 ? `+${adj} Shadow Growth` : `${Math.abs(adj)} Zeal's Fracture`}
           </div>
         )}
 
@@ -77,7 +81,7 @@ const EnemyDisplay: React.FC<{ enemy: any }> = ({ enemy }) => {
           <span className="tracking-widest">Vitality</span>
           <div className="flex items-center gap-2">
             {adj > 0 && <span className="text-[#8b0000] animate-pulse">🛡️ (+{adj} Barrier)</span>}
-            {adj < 0 && <span className="text-green-700 animate-pulse">✨ ({adj} Fracture)</span>}
+            {adj < 0 && <span className="text-green-700 animate-pulse">✨ ({Math.abs(adj)} Fracture)</span>}
             <span className="pencil-font text-xs uppercase tracking-tighter ml-2">{Math.ceil(enemy.hp)} / {enemy.maxHp} HP</span>
           </div>
         </div>
@@ -322,9 +326,11 @@ export default function App() {
             phase: 2,
             message: msg,
             killed: res.killed,
+            originalRoll: res.originalRoll,
+            modificationReason: res.modificationReason,
             victoryPayload: res.killed ? {
-              winner: winnerName,
-              winnerLevel: winnerParticipant?.level || 1,
+              winner: res.winnerName || "The Fellowship",
+              winnerLevel: res.winnerLevel || 1,
               enemyName: currentEnemy?.name || "The Foe",
               weaponTier: res.tier
             } : null
@@ -742,9 +748,30 @@ export default function App() {
                 <div className="animate-in zoom-in fade-in duration-500">
                   <div className="mb-6 relative flex flex-col items-center">
                     <div className="flex items-center gap-6 mb-8 mt-2">
-                      <div className="text-center">
+                      <div className="text-center relative">
                         <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Basis</div>
-                        <div className="text-4xl font-black">{activeRoll.roll}</div>
+                        <div className="flex items-center justify-center gap-2">
+                          {activeRoll.modificationReason && (
+                            <span className="text-lg opacity-40 line-through decoration-[#8b0000] decoration-2">
+                              {activeRoll.originalRoll}
+                            </span>
+                          )}
+                          <div className={`text-4xl font-black ${activeRoll.modificationReason === 'inspiration' ? 'text-amber-500' :
+                            activeRoll.modificationReason === 'curse' ? 'text-red-900' : ''
+                            }`}>
+                            {activeRoll.roll}
+                          </div>
+                        </div>
+                        {activeRoll.modificationReason === 'inspiration' && (
+                          <div className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap bg-amber-500 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full shadow-sm animate-bounce">
+                            Inspired
+                          </div>
+                        )}
+                        {activeRoll.modificationReason === 'curse' && (
+                          <div className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap bg-red-950 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+                            Cursed
+                          </div>
+                        )}
                       </div>
                       <div className="text-2xl font-light opacity-30 mt-4">+</div>
                       <div className="text-center">
@@ -765,7 +792,11 @@ export default function App() {
                     <div className={`text-7xl font-black pencil-font ${activeRoll.isCrit ? 'text-[#8b0000] scale-110 drop-shadow-xl' : activeRoll.isMiss ? 'text-gray-400 line-through' : 'text-[#3a352f]'}`}>
                       {activeRoll.isCrit ? "MAX" : activeRoll.damage} <span className="text-xl uppercase tracking-tighter opacity-30">DMG</span>
                     </div>
-                    {activeRoll.isCrit && <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8b0000] animate-bounce mt-2">The Foe is Vanquished!</div>}
+                    {activeRoll.isCrit && (
+                      <div className="absolute -top-3 -right-3 bg-[#8b0000] text-white text-[10px] font-black px-3 py-1 uppercase tracking-widest rotate-12 shadow-lg animate-bounce">
+                        {activeRoll.modificationReason === 'double_damage' ? 'DOUBLE DAMAGE' : 'INSTANT KILL'}
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-8 border-t-2 border-[#5c5346]/10 relative">
@@ -832,18 +863,18 @@ export default function App() {
                     "The terror known as <span className="font-bold not-italic">{victoryData.enemyName}</span> has been struck from the living ledger forever."
                   </p>
 
-                  {victoryData.weaponTier > 0 && (
-                    <div className="mb-8">
-                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">Claimant of the Spoils</div>
-                      <div className="text-3xl font-black uppercase tracking-tight text-[#8b0000]">
-                        {victoryData.winner}
-                      </div>
-                      <div className="flex flex-col items-center mt-2">
-                        <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 mb-1">Level {victoryData.winnerLevel}</div>
-                        <div className="text-sm font-black uppercase tracking-widest text-[#8b0000]">{getLevelTitle(victoryData.winnerLevel)}</div>
-                      </div>
+                  <div className="mb-8">
+                    <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">
+                      {victoryData.weaponTier > 0 ? "Claimant of the Spoils" : "Slayer of the Shadow"}
                     </div>
-                  )}
+                    <div className="text-3xl font-black uppercase tracking-tight text-[#8b0000]">
+                      {victoryData.winner}
+                    </div>
+                    <div className="flex flex-col items-center mt-2">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 mb-1">Level {victoryData.winnerLevel}</div>
+                      <div className="text-sm font-black uppercase tracking-widest text-[#8b0000]">{getLevelTitle(victoryData.winnerLevel)}</div>
+                    </div>
+                  </div>
 
                   {victoryData.weaponTier > 0 && (
                     <div className="text-center mb-4 relative">
@@ -863,7 +894,7 @@ export default function App() {
                 <div className="mt-8 space-y-6">
                   <div className="h-px bg-[#3a352f]/10 w-full mb-6" />
 
-                  {victoryData.weaponTier > 0 && campaign.currentEnemyIndex < campaign.enemies.length && (
+                  {campaign.currentEnemyIndex < campaign.enemies.length && (
                     <div className="text-left space-y-4 animate-in slide-in-from-bottom-2 duration-500">
                       <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 text-center mb-4">Ritual of Succession</div>
 
@@ -895,10 +926,14 @@ export default function App() {
                     className="w-full py-5 button-ink text-lg font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
                   >
                     {(() => {
-                      const next = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
-                      const isShadow = next?.name.includes("Shadow") || next?.name.startsWith("The Shadow of");
-                      const prevWasShadow = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex - 1)?.name.includes("Shadow");
-                      return (isShadow && !prevWasShadow) ? "Enter The Shadow Realm" : "Onward";
+                      const config = JSON.parse(campaign.config);
+                      const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
+                      const threshold = totalWeeks - 1;
+                      const nextOrder = campaign.currentEnemyIndex; // campaign index is already incremented in handleAction
+                      const prevOrder = nextOrder - 1;
+
+                      const enteringShadow = nextOrder >= threshold && prevOrder < threshold;
+                      return enteringShadow ? "Enter The Shadow Realm" : "Onward";
                     })()}
                   </button>
                   <div className="mt-4 text-[9px] font-bold uppercase tracking-widest opacity-30 italic">
@@ -949,46 +984,44 @@ export default function App() {
                   </section>
 
                   {/* Shadow Growth & Shrink */}
-                  <section className={`${resolutionData.shadowShrinkHP > 0 ? 'bg-green-600/5 border-green-600/10' : 'bg-[#8b0000]/5 border-[#8b0000]/10'} border p-6 relative overflow-hidden`}>
-                    <div className="absolute top-0 right-0 p-2 opacity-5 text-4xl font-black">{resolutionData.shadowShrinkHP > 0 ? '✨' : '🌑'}</div>
-                    <h4 className={`text-[10px] font-bold uppercase tracking-widest ${resolutionData.shadowShrinkHP > 0 ? 'text-green-700' : 'text-[#8b0000]'} mb-2`}>
-                      {resolutionData.shadowShrinkHP > 0 ? 'The Shadow Recedes' : 'The Shadow Growth'}
+                  <section className={`${(resolutionData.netMisses || 0) < 0 ? 'bg-green-600/5 border-green-600/10' : 'bg-[#8b0000]/5 border-[#8b0000]/10'} border p-6 relative overflow-hidden`}>
+                    <div className="absolute top-0 right-0 p-2 opacity-5 text-4xl font-black">{(resolutionData.netMisses || 0) < 0 ? '✨' : '🌑'}</div>
+                    <h4 className={`text-[10px] font-bold uppercase tracking-widest ${(resolutionData.netMisses || 0) < 0 ? 'text-green-700' : 'text-[#8b0000]'} mb-2`}>
+                      {(resolutionData.netMisses || 0) < 0 ? 'The Shadow Recedes' : 'The Shadow Grows'}
                     </h4>
-                    {resolutionData.shadowShrinkHP > 0 ? (
+                    {(resolutionData.netMisses || 0) < 0 ? (
                       <>
-                        <div className="text-3xl font-black text-green-700 mb-1">-{resolutionData.shadowShrinkHP} HP</div>
+                        <div className="flex items-end gap-3 mb-1">
+                          <div className="text-3xl font-black text-green-700 leading-none">-{Math.abs(resolutionData.netMisses)} Shadow Monsters</div>
+                        </div>
+                        {resolutionData.shadowShrinkHP > 0 && (
+                          <div className="text-xl font-black text-green-800/80 mb-2">Zeal's Reward: -{resolutionData.shadowShrinkHP} HP</div>
+                        )}
                         <p className="text-[11px] italic opacity-70 leading-relaxed">
-                          The fellowship's collective zeal burns through the darkness! Your extra effort has stripped the final boss of their power.
+                          The fellowship's collective zeal burns the darkness! Your extra effort has banished {resolutionData.shadowMonstersBanished} horrors and weakened the path to the final shadow.
                         </p>
                       </>
-                    ) : resolutionData.shadowMonstersSpawned > 0 ? (
+                    ) : (resolutionData.netMisses || 0) > 0 ? (
                       <>
-                        <div className="text-3xl font-black text-[#8b0000] mb-1">+{resolutionData.shadowMonstersSpawned} Shadow Monsters</div>
+                        <div className="text-3xl font-black text-[#8b0000] mb-1">+{resolutionData.netMisses} Shadow Monsters</div>
                         <p className="text-[11px] italic opacity-70 leading-relaxed">
-                          The darkness thickens! Your missed Oaths have manifested into {resolutionData.shadowMonstersSpawned} new terrors that stand between you and the finish.
-                        </p>
-                      </>
-                    ) : resolutionData.shadowGrowthHP > 0 ? (
-                      <>
-                        <div className="text-3xl font-black text-[#8b0000] mb-1">+{resolutionData.shadowGrowthHP} HP</div>
-                        <p className="text-[11px] italic opacity-70 leading-relaxed">
-                          The final foe devours missed Oaths from the fellowship. The darkness thickens...
+                          The darkness thickens! Your missed Oaths have manifested into {resolutionData.netMisses} new terrors that stand between you and the finish.
                         </p>
                       </>
                     ) : (
                       <p className="text-[11px] italic opacity-70 leading-relaxed">
-                        The fellowship held firm. The shadow remains stunted this cycle.
+                        The balance is maintained. The shadows neither grow nor recede this cycle.
                       </p>
                     )}
                   </section>
-
-                  <button
-                    onClick={() => setResolutionData(null)}
-                    className="w-full py-5 button-ink text-lg font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
-                  >
-                    Enter Next Week
-                  </button>
                 </div>
+
+                <button
+                  onClick={() => setResolutionData(null)}
+                  className="w-full py-5 button-ink text-lg font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
+                >
+                  Enter Next Week
+                </button>
               </div>
             </div>
           </div>
@@ -1047,21 +1080,23 @@ export default function App() {
                 {[...(participants || [])].sort((a, b) => a.id.localeCompare(b.id)).map((p: any) => {
                   return (
                     <div key={p.id} className="flex flex-col items-center relative group">
-                      {p.isLootDisqualified && (
-                        <div className="absolute -top-2 -right-2 bg-[#8b0000] text-[#fdf6e3] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 z-10 shadow-md ring-2 ring-[#fdf6e3]">
-                          Cursed
-                        </div>
-                      )}
-                      {p.isInspired && (
-                        <div className="absolute -top-2 -right-2 bg-yellow-400 text-[#3a352f] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 z-10 shadow-md ring-2 ring-yellow-200 animate-pulse">
-                          Inspired
-                        </div>
-                      )}
-                      {p.isCursed && (
-                        <div className="absolute -top-2 -right-2 bg-[#1a1a1a] text-[#8b0000] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 z-10 shadow-md ring-2 ring-[#8b0000]/40 animate-pulse">
-                          Cursed
-                        </div>
-                      )}
+                      <div className="absolute -top-2 -right-2 flex flex-col items-end gap-1 z-10 pointer-events-none">
+                        {p.isBlessed && (
+                          <div className="bg-gradient-to-br from-yellow-400 to-blue-500 text-white text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 shadow-md ring-2 ring-blue-300 animate-pulse">
+                            Blessed
+                          </div>
+                        )}
+                        {p.isInspired && !p.isBlessed && (
+                          <div className="bg-yellow-400 text-[#3a352f] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 shadow-md ring-2 ring-yellow-200 animate-pulse">
+                            Inspired
+                          </div>
+                        )}
+                        {p.isCursed && (
+                          <div className="bg-[#1a1a1a] text-[#8b0000] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 shadow-md ring-2 ring-[#8b0000]/40 animate-pulse">
+                            Cursed
+                          </div>
+                        )}
+                      </div>
                       <button
                         onClick={() => handleAction('attack', p.id)}
                         disabled={!!activeRoll || (currentEnemy?.isDead)}
@@ -1248,6 +1283,27 @@ export default function App() {
                 })}
               </div>
             </section>
+
+            <section className="mt-16 pt-12 border-t border-[#5c5346]/10 max-w-4xl mx-auto">
+              <div className="text-center mb-8">
+                <div className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-30 mb-1">Current Expedition Progress</div>
+                <h3 className="text-2xl font-black uppercase tracking-tight opacity-60">Quest Summary</h3>
+              </div>
+              <div className="grid grid-cols-3 gap-8">
+                <div className="text-center">
+                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-2">Cycles Endured</div>
+                  <div className="text-3xl font-black">{campaign.currentWeek}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-2">Foes Vanquished</div>
+                  <div className="text-3xl font-black">{campaign.enemies.filter((e: any) => e.isDead).length}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-2">Fellowship Size</div>
+                  <div className="text-3xl font-black">{campaign.participants?.length || 0}</div>
+                </div>
+              </div>
+            </section>
           </div>
         )
       }
@@ -1330,6 +1386,11 @@ export default function App() {
                     {p.isInspired && (
                       <div className="absolute -top-2 -left-2 bg-yellow-400 text-[#3a352f] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest -rotate-12 z-10 shadow-md ring-2 ring-yellow-200 animate-pulse">
                         Inspired
+                      </div>
+                    )}
+                    {p.isBlessed && (
+                      <div className="absolute -top-2 -left-2 bg-gradient-to-br from-yellow-400 to-blue-500 text-white text-[8px] font-black px-2 py-0.5 uppercase tracking-widest -rotate-12 z-10 shadow-md ring-2 ring-blue-300 animate-pulse">
+                        Blessed
                       </div>
                     )}
                     {p.isCursed && (

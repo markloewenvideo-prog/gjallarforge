@@ -44,6 +44,7 @@ model Participant {
   isLootDisqualified Boolean @default(false)
   isInspired         Boolean @default(false)
   isCursed           Boolean @default(false)
+  isBlessed          Boolean @default(false)
 
   // Fair Sweat Loot System fields
   bountyScore          Int      @default(0)

@@ -18,6 +18,7 @@ export interface Participant {
   workoutsThisWeek: number;
   isLootDisqualified: boolean; // From rolling a natural 1 against current enemy
   isInspired: boolean; // From rolling a natural 20
+  isBlessed: boolean; // Replaces Inspired in the Shadow Realm
   bountyScore: number;
   nat20Count: number;
   highestSingleRoll: number;

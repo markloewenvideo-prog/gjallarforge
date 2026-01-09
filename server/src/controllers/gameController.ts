@@ -15,6 +15,9 @@ export const performAction = async (req: Request, res: Response) => {
             return;
         }
 
+        let winnerId: string | null = null;
+        let winnerInfo: any = null;
+
         const campaign = await prisma.campaign.findUnique({
             where: { id: campaignId },
             include: { enemies: true }
@@ -43,7 +46,18 @@ export const performAction = async (req: Request, res: Response) => {
         // --- THE IRON PATH (Simplified) ---
 
         // 1. Roll d20
-        const rawD20 = Math.floor(Math.random() * 20) + 1;
+        const originalRoll = Math.floor(Math.random() * 20) + 1;
+        let rawD20 = originalRoll;
+        let modificationReason: string | null = null;
+
+        // --- INSPIRED PROTECTION & CURSED HINDRANCE ---
+        if (rawD20 === 1 && participant.isInspired) {
+            rawD20 = 2; // Bump 1 to 2
+            modificationReason = "inspiration";
+        } else if (rawD20 === 20 && participant.isCursed) {
+            rawD20 = 19; // Bump 20 to 19
+            modificationReason = "curse";
+        }
 
         // 2. Weapon Modifier
         const weapon = WEAPONS[participant.weaponTier as keyof typeof WEAPONS] || WEAPONS[0];
@@ -57,9 +71,20 @@ export const performAction = async (req: Request, res: Response) => {
         let isCrit = false;
         let isMiss = false;
 
-        if (rawD20 === 20) {
-            damage = currentEnemy.hp; // Instant Kill
-            isCrit = true;
+        const isShadowMonster = currentEnemy.hp <= 10 && currentEnemy.weaponDropTier === 0;
+        const isFinalBoss = currentEnemy.order === (Number(JSON.parse(campaign.config).totalWeeks || 4) - 1);
+
+        if (rawD20 === 20 || (rawD20 >= 2 && participant.isBlessed && isShadowMonster)) {
+            if (isFinalBoss) {
+                // Double Damage for Final Boss on Nat 20
+                damage = (rawD20 + strength + weaponBonus) * 2;
+                isCrit = true;
+                modificationReason = "double_damage";
+            } else {
+                // Instant Kill for others (and Blessed vs Shadows)
+                damage = currentEnemy.hp;
+                isCrit = true;
+            }
         } else if (rawD20 === 1) {
             damage = 0;
             isMiss = true;
@@ -93,15 +118,38 @@ export const performAction = async (req: Request, res: Response) => {
             })
         ]);
 
+        // Log the strike FIRST for narrative consistency
+        await prisma.logEntry.create({
+            data: {
+                campaignId,
+                type: 'attack',
+                content: JSON.stringify({
+                    participantId,
+                    participantName: participant.name,
+                    enemyName: currentEnemy.name,
+                    roll: rawD20,
+                    originalRoll,
+                    modificationReason,
+                    isCrit,
+                    isMiss,
+                    modifier: weaponBonus,
+                    strength,
+                    damage,
+                    hit: !isMiss
+                })
+            }
+        });
+
         const updatedEnemy = await prisma.enemy.findUnique({ where: { id: currentEnemy.id } });
         let isKill = false;
         if (updatedEnemy && updatedEnemy.hp <= 0) {
             isKill = true;
 
-            let winnerId = null;
             if (currentEnemy.weaponDropTier > 0) {
-                const eligible = await prisma.participant.findMany({
-                    where: { campaignId, isLootDisqualified: false },
+                // Fetch all participants sorted by Bounty Score (The Fair Sweat Rule)
+                // Cursed players are back in the loot pool!
+                const participants = await prisma.participant.findMany({
+                    where: { campaignId },
                     orderBy: [
                         { bountyScore: 'desc' },
                         { nat20Count: 'desc' },
@@ -109,11 +157,22 @@ export const performAction = async (req: Request, res: Response) => {
                         { bountyScoreUpdatedAt: 'asc' }
                     ] as any
                 });
-                winnerId = eligible[0]?.id || participant.id;
 
-                // Update winner's weapon armament if the new weapon is better
-                const winner = await prisma.participant.findUnique({ where: { id: winnerId } });
-                if (winner && currentEnemy.weaponDropTier > winner.weaponTier) {
+                // Find the highest roller who doesn't already have this tier (or better)
+                // If everyone is geared up, the top roller keeps the prestige (or loot is lost to the forge)
+                // Let's find the first person who would actually benefit.
+                let winner = participants.find(p => p.weaponTier < currentEnemy.weaponDropTier);
+
+                // If no one is eligible (everyone has better/equal), default to the actual top roller
+                if (!winner && participants.length > 0) {
+                    winner = participants[0];
+                }
+
+                winnerId = winner?.id || participant.id;
+
+                // Update winner's weapon armament (Only if not a Shadow Monster)
+                const isShadowMonster = currentEnemy.weaponDropTier === 0;
+                if (!isShadowMonster && winner && currentEnemy.weaponDropTier > winner.weaponTier) {
                     await prisma.participant.update({
                         where: { id: winnerId },
                         data: { weaponTier: currentEnemy.weaponDropTier }
@@ -131,30 +190,44 @@ export const performAction = async (req: Request, res: Response) => {
                 data: { currentEnemyIndex: { increment: 1 } }
             });
 
-            const nextEnemyIndex = campaign.currentEnemyIndex + 1;
-            const nextEnemy = campaign.enemies.find(e => e.order === nextEnemyIndex);
+            const config = JSON.parse(campaign.config);
+            const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
+            const threshold = totalWeeks - 1;
 
-            if (nextEnemy && (nextEnemy.name.includes("Shadow") || nextEnemy.name.startsWith("The Shadow of"))) {
-                if (!currentEnemy.name.includes("Shadow") && !currentEnemy.name.startsWith("The Shadow of")) {
-                    await prisma.logEntry.create({
-                        data: {
-                            campaignId,
-                            type: 'system',
-                            content: JSON.stringify({ message: "EVENT_SHADOW_REALM: The fellowship crosses the threshold. Eternal night awaits." })
-                        }
-                    });
+            if (currentEnemy.order < threshold && (campaign.currentEnemyIndex + 1) >= threshold) {
+                // --- APPLY BLESSED STATUS ---
+                const participants = await prisma.participant.findMany({ where: { campaignId } });
+                const workoutsPerWeek = Number(config.workoutsPerWeek || 3);
+                const weekThreshold = threshold; // e.g. entering week 4, threshold is 3
+                const totalPossible = workoutsPerWeek * weekThreshold;
+
+                for (const p of participants) {
+                    if (p.totalWorkouts >= totalPossible) {
+                        await prisma.participant.update({
+                            where: { id: p.id },
+                            data: { isBlessed: true, isInspired: false }
+                        });
+                    }
                 }
+
+                await prisma.logEntry.create({
+                    data: {
+                        campaignId,
+                        type: 'system',
+                        content: JSON.stringify({ message: "EVENT_SHADOW_REALM: The fellowship crosses the threshold. Those who kept their Oaths are BLESSED." })
+                    }
+                });
             }
 
             if (winnerId) {
-                const winner = await prisma.participant.findUnique({ where: { id: winnerId } });
+                winnerInfo = await prisma.participant.findUnique({ where: { id: winnerId } });
                 await prisma.logEntry.create({
                     data: {
                         campaignId,
                         type: 'system',
                         content: JSON.stringify({
-                            message: `EVENT_LOOT_CLAIMED:${winner?.name || "A hero"} claims the loot!`,
-                            winnerName: winner?.name || "A hero",
+                            message: `EVENT_LOOT_CLAIMED:${winnerInfo?.name || "A hero"} claims the loot!`,
+                            winnerName: winnerInfo?.name || "A hero",
                             tier: currentEnemy.weaponDropTier
                         })
                     }
@@ -162,26 +235,7 @@ export const performAction = async (req: Request, res: Response) => {
             }
         }
 
-        // Log the strike
-        await prisma.logEntry.create({
-            data: {
-                campaignId,
-                type: 'attack',
-                content: JSON.stringify({
-                    participantId,
-                    participantName: participant.name,
-                    enemyName: currentEnemy.name,
-                    roll: rawD20,
-                    isCrit,
-                    isMiss,
-                    modifier: weaponBonus,
-                    strength,
-                    damage,
-                    hit: !isMiss
-                })
-            }
-        });
-
+        // Emit update
         // Emit update
         const io = getIO();
         const updatedCampaign = await prisma.campaign.findUnique({
@@ -193,10 +247,6 @@ export const performAction = async (req: Request, res: Response) => {
             }
         });
 
-        if (updatedCampaign) {
-            io.to(campaignId).emit('gamestate_update', updatedCampaign);
-        }
-
         res.json({
             success: true,
             roll: rawD20,
@@ -206,7 +256,12 @@ export const performAction = async (req: Request, res: Response) => {
             isMiss,
             strength,
             modifier: weaponBonus,
-            campaign: updatedCampaign
+            campaign: updatedCampaign,
+            winnerName: winnerInfo?.name,
+            winnerLevel: winnerInfo?.level,
+            tier: isKill ? currentEnemy.weaponDropTier : 0,
+            originalRoll,
+            modificationReason
         });
 
     } catch (error) {
