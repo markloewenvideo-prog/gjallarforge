@@ -785,11 +785,21 @@ export default function App() {
                   }}
                   className="w-full py-4 button-ink font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-lg"
                 >
-                  Onward
+                  {(() => {
+                    const next = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
+                    const isShadow = next?.name.includes("Shadow") || next?.name.startsWith("The Shadow of");
+                    const prevWasShadow = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex - 1)?.name.includes("Shadow");
+                    return (isShadow && !prevWasShadow) ? "Enter The Shadow Realm" : "Onward";
+                  })()}
                 </button>
               </>
             )}
           </div>
+        </div>
+      )}
+      {activeRoll && activeRoll.log && (
+        <div className="fixed bottom-4 right-4 z-[151] p-4 bg-black/70 text-white rounded-lg shadow-lg max-w-xs">
+          <p className="text-sm">{activeRoll.log}</p>
         </div>
       )}
 
@@ -820,35 +830,38 @@ export default function App() {
                     "The terror known as <span className="font-bold not-italic">{victoryData.enemyName}</span> has been struck from the living ledger forever."
                   </p>
 
-                  <div className="mb-8">
-                    <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">Claimant of the Spoils</div>
-                    <div className="text-3xl font-black uppercase tracking-tight text-[#8b0000]">
-                      {victoryData.winner}
+                  {victoryData.weaponTier > 0 && (
+                    <div className="mb-8">
+                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">Claimant of the Spoils</div>
+                      <div className="text-3xl font-black uppercase tracking-tight text-[#8b0000]">
+                        {victoryData.winner}
+                      </div>
+                      <div className="flex flex-col items-center mt-2">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 mb-1">Level {victoryData.winnerLevel}</div>
+                        <div className="text-sm font-black uppercase tracking-widest text-[#8b0000]">{getLevelTitle(victoryData.winnerLevel)}</div>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="flex flex-col items-center mb-6">
-                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 mb-1">Level {victoryData.winnerLevel}</div>
-                    <div className="text-sm font-black uppercase tracking-widest text-[#8b0000]">{getLevelTitle(victoryData.winnerLevel)}</div>
-                  </div>
-
-                  <div className="text-center mb-4 relative">
-                    <div className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-2">Bequeathed Armament</div>
-                    <div className="text-xl font-black uppercase tracking-tight py-2 px-4 border-2 border-[#5c5346]/20 inline-block bg-white/40">
-                      {WEAPONS[victoryData.weaponTier]?.name || "Rusty Dagger"}
+                  {victoryData.weaponTier > 0 && (
+                    <div className="text-center mb-4 relative">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-2">Bequeathed Armament</div>
+                      <div className="text-xl font-black uppercase tracking-tight py-2 px-4 border-2 border-[#5c5346]/20 inline-block bg-white/40">
+                        {WEAPONS[victoryData.weaponTier as WeaponTier]?.name || "Rusty Dagger"}
+                      </div>
+                      <div className="mt-2 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-[0.2em] opacity-50">
+                        <span className="pencil-font text-xs tracking-tighter">Strike Bonus: {WEAPONS[victoryData.weaponTier as WeaponTier]?.dice}</span>
+                        <span>•</span>
+                        <span>Forge Rank {victoryData.weaponTier}</span>
+                      </div>
                     </div>
-                    <div className="mt-2 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-[0.2em] opacity-50">
-                      <span className="pencil-font text-xs tracking-tighter">Power: {WEAPONS[victoryData.weaponTier]?.dice}</span>
-                      <span>•</span>
-                      <span>Tier {victoryData.weaponTier}</span>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 <div className="mt-8 space-y-6">
                   <div className="h-px bg-[#3a352f]/10 w-full mb-6" />
 
-                  {campaign.currentEnemyIndex < campaign.enemies.length && (
+                  {victoryData.weaponTier > 0 && campaign.currentEnemyIndex < campaign.enemies.length && (
                     <div className="text-left space-y-4 animate-in slide-in-from-bottom-2 duration-500">
                       <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 text-center mb-4">Ritual of Succession</div>
 
@@ -863,10 +876,11 @@ export default function App() {
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[9px] font-bold uppercase opacity-30 ml-2">The Shadow's Legend (Flavour)</label>
+                        <label className="text-[9px] font-bold uppercase opacity-30 ml-2">The Shadow's Legend (Flavor)</label>
                         <textarea
-                          className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-sm outline-none focus:border-[#3a352f]/40 transition-all min-h-[80px]"
-                          placeholder="What dark deeds have they done?"
+                          className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-sm outline-none focus:border-[#3a352f]/40 transition-all min-h-[80px] text-center"
+                          rows={2}
+                          placeholder="What terror greets the fellowship?"
                           value={nextVillainDesc}
                           onChange={e => setNextVillainDesc(e.target.value)}
                         />
@@ -878,7 +892,12 @@ export default function App() {
                     onClick={handleForgeOnwards}
                     className="w-full py-5 button-ink text-lg font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
                   >
-                    Onward
+                    {(() => {
+                      const next = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
+                      const isShadow = next?.name.includes("Shadow") || next?.name.startsWith("The Shadow of");
+                      const prevWasShadow = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex - 1)?.name.includes("Shadow");
+                      return (isShadow && !prevWasShadow) ? "Enter The Shadow Realm" : "Onward";
+                    })()}
                   </button>
                   <div className="mt-4 text-[9px] font-bold uppercase tracking-widest opacity-30 italic">
                     The fellowship grows stronger. {campaign.currentEnemyIndex < campaign.enemies.length ? "The next shadow awaits." : "The realm is safe... for now."}
@@ -940,11 +959,18 @@ export default function App() {
                           The fellowship's collective zeal burns through the darkness! Your extra effort has stripped the final boss of their power.
                         </p>
                       </>
+                    ) : resolutionData.shadowMonstersSpawned > 0 ? (
+                      <>
+                        <div className="text-3xl font-black text-[#8b0000] mb-1">+{resolutionData.shadowMonstersSpawned} Shadow Monsters</div>
+                        <p className="text-[11px] italic opacity-70 leading-relaxed">
+                          The darkness thickens! Your missed Oaths have manifested into {resolutionData.shadowMonstersSpawned} new terrors that stand between you and the finish.
+                        </p>
+                      </>
                     ) : resolutionData.shadowGrowthHP > 0 ? (
                       <>
                         <div className="text-3xl font-black text-[#8b0000] mb-1">+{resolutionData.shadowGrowthHP} HP</div>
                         <p className="text-[11px] italic opacity-70 leading-relaxed">
-                          The final foe devours {resolutionData.totalMisses} missed Oaths from the fellowship. The darkness thickens...
+                          The final foe devours missed Oaths from the fellowship. The darkness thickens...
                         </p>
                       </>
                     ) : (
@@ -1126,14 +1152,17 @@ export default function App() {
                   }
 
                   // Milestone: SHADOW_MOVEMENTS
-                  if (log.type === 'system' && (content.message?.includes('SHADOW_GROWTH') || content.message?.includes('SHADOW_RECEDES'))) {
+                  if (log.type === 'system' && (content.message?.includes('SHADOW_GROWTH') || content.message?.includes('SHADOW_RECEDES') || content.message?.includes('EVENT_SHADOW_REALM'))) {
                     const isGrowth = content.message.includes('SHADOW_GROWTH');
+                    const isRealm = content.message.includes('EVENT_SHADOW_REALM');
                     return (
-                      <div key={log.id} className={`py-4 px-6 border-y border-dashed ${isGrowth ? 'border-[#8b0000]/20 bg-[#8b0000]/5' : 'border-green-700/20 bg-green-700/5'} my-4 text-center`}>
-                        <div className={`text-[9px] font-bold uppercase tracking-[0.3em] ${isGrowth ? 'text-[#8b0000]' : 'text-green-800'} mb-1`}>
-                          {isGrowth ? 'The Shadow Grows' : 'The Shadow Recedes'}
+                      <div key={log.id} className={`py-4 px-6 border-y border-dashed ${isGrowth ? 'border-[#8b0000]/20 bg-[#8b0000]/5' : isRealm ? 'border-[#3a352f]/40 bg-black/20 text-white' : 'border-green-700/20 bg-green-700/5'} my-4 text-center`}>
+                        <div className={`text-[9px] font-bold uppercase tracking-[0.3em] ${isGrowth ? 'text-[#8b0000]' : isRealm ? 'text-white' : 'text-green-800'} mb-1`}>
+                          {isGrowth ? 'The Shadow Grows' : isRealm ? 'THRESHOLD CROSSED' : 'The Shadow Recedes'}
                         </div>
-                        <div className="pencil-font text-sm italic opacity-60">"{content.message.split(':')[1].trim()}"</div>
+                        <div className={`pencil-font text-sm italic ${isRealm ? 'opacity-100' : 'opacity-60'}`}>
+                          "{isRealm ? content.message.split(':')[1].trim() : content.message.split(':')[1].trim()}"
+                        </div>
                       </div>
                     );
                   }
@@ -1322,7 +1351,7 @@ export default function App() {
                       <div className="text-[9px] font-bold uppercase opacity-40 tracking-widest mb-1 flex items-center gap-2">
                         <span>⚔️</span> Armament
                       </div>
-                      <div className="text-xs font-bold">{weapon.name} <span className="opacity-40 font-normal">({weapon.dice})</span></div>
+                      <div className="text-xs font-bold">{weapon.name} <span className="opacity-40 font-normal">({weapon.dice} bonus)</span></div>
                     </div>
 
                     <div>

@@ -43,47 +43,40 @@ export const createCampaign = async (req: Request, res: Response) => {
         let generatedMonsterData: any[];
         try {
             const totalWeeks = Math.max(1, Number(config.totalWeeks || config.weeks || 4));
-            const workoutsPerWeek = Number(config.workoutsPerWeek || 3);
+            generatedMonsterData = [];
 
-            generatedMonsterData = Array.from({ length: totalWeeks }, (_, i) => {
-                const progress = i / Math.max(1, totalWeeks - 1);
-                const isFinalBoss = i === totalWeeks - 1;
-                let tier: string;
+            for (let week = 0; week < totalWeeks; week++) {
+                const isFinalWeek = week === totalWeeks - 1;
 
-                if (isFinalBoss) {
-                    tier = 'T6';
-                } else {
-                    if (progress < 0.2) tier = 'T1';
-                    else if (progress < 0.4) tier = 'T2';
-                    else if (progress < 0.6) tier = 'T3';
-                    else if (progress < 0.8) tier = 'T4';
-                    else tier = 'T5';
+                // 1. Weak Monster
+                const weakPool = MONSTER_TIERS.WEAK;
+                const weakMonster = (Math.random() > 0.5 ? weakPool.funny : weakPool.regular)[Math.floor(Math.random() * weakPool.regular.length)];
+                generatedMonsterData.push({ ...weakMonster, type: 'WEAK', week });
+
+                // 2. Medium Monster
+                const medPool = MONSTER_TIERS.MEDIUM;
+                const medMonster = (Math.random() > 0.5 ? medPool.funny : medPool.regular)[Math.floor(Math.random() * medPool.regular.length)];
+                generatedMonsterData.push({ ...medMonster, type: 'MEDIUM', week });
+
+                // 3. Hard Monster (or Boss)
+                let hardPool = isFinalWeek ? MONSTER_TIERS.BOSS : MONSTER_TIERS.HARD;
+                const hardMonster = (Math.random() > 0.5 ? hardPool.funny : hardPool.regular)[Math.floor(Math.random() * hardPool.regular.length)];
+
+                let finalHard = { ...hardMonster, type: 'HARD', week };
+
+                // Override for the first week's Hard monster if provided
+                if (week === 0 && initialEnemy && typeof initialEnemy === 'object') {
+                    finalHard.name = initialEnemy.name || finalHard.name;
+                    finalHard.description = initialEnemy.description || finalHard.description;
                 }
 
-                const pool = MONSTER_TIERS[tier];
-                const useFunny = Math.random() > 0.5;
-                const subPool = useFunny ? pool.funny : pool.regular;
-
-                const baseMonster = subPool[Math.floor(Math.random() * subPool.length)];
-
-                // Override for the first monster if provided
-                if (i === 0 && initialEnemy && typeof initialEnemy === 'object') {
-                    let finalName = initialEnemy.name || baseMonster.name;
-                    const isFinalBoss = i === totalWeeks - 1;
-
-                    if (isFinalBoss && !finalName.startsWith("The Shadow of")) {
-                        finalName = `The Shadow of ${finalName}`;
-                    }
-
-                    return {
-                        ...baseMonster,
-                        name: finalName,
-                        description: initialEnemy.description || baseMonster.description
-                    };
+                // If final week, add "The Shadow of" prefix if not there
+                if (isFinalWeek && !finalHard.name.startsWith("The Shadow of")) {
+                    finalHard.name = `The Shadow of ${finalHard.name}`;
                 }
 
-                return baseMonster;
-            });
+                generatedMonsterData.push(finalHard);
+            }
             console.log("[DEBUG] Generation complete. Count:", generatedMonsterData.length);
         } catch (e: any) {
             console.error("[DEBUG] Step 1 Failed:", e);
@@ -157,23 +150,48 @@ export const createCampaign = async (req: Request, res: Response) => {
                     },
                     enemies: {
                         create: generatedMonsterData.map((data: any, i: number) => {
-                            const dropTier = getWeaponDropTier(i, totalWeeks);
-                            const avgDmg = calculateAvgWeaponDamage(dropTier);
-                            const expectedLevel = 1 + i;
+                            const weekIndex = Math.floor(i / 3);
+                            const typeInWeek = i % 3; // 0=Weak, 1=Medium, 2=Hard
+
+                            // Weapon drops only on Hard monsters (the 3rd of the week)
+                            const dropTier = typeInWeek === 2 ? getWeaponDropTier(weekIndex, totalWeeks) : 0;
+
+                            // Weekly damage expectation
+                            const expectedLevel = 1 + weekIndex;
                             const totalCampaignWorkouts = participantsData.length * workoutsPerWeek * totalWeeks;
 
-                            const isBoss = i === totalWeeks - 1;
-                            const budgetPercentage = isBoss ? 0.40 : (0.60 / Math.max(1, totalWeeks - 1));
-                            const budgetedWorkoutsForThisEnemy = totalCampaignWorkouts * budgetPercentage;
+                            const isFinalBoss = i === (totalWeeks * 3) - 1;
 
-                            const currentWeaponBonus = i === 0 ? 0 : calculateAvgWeaponDamage(getWeaponDropTier(i - 1, totalWeeks));
+                            // HP BUDGETING
+                            // Let's reserve 30% for the Final Boss.
+                            // Split remaining across weeks, then within weeks: 15/30/55
+                            const finalBossBudget = 0.30;
+                            const remainingBudget = 1.0 - finalBossBudget;
+                            const weeklyBudget = remainingBudget / totalWeeks;
+
+                            let enemyBudget;
+                            if (isFinalBoss) {
+                                enemyBudget = finalBossBudget;
+                            } else {
+                                const weekWeights = [0.15, 0.30, 0.55];
+                                enemyBudget = weeklyBudget * weekWeights[typeInWeek];
+                            }
+
+                            const budgetedWorkouts = totalCampaignWorkouts * enemyBudget;
+
+                            // Damage scaling
+                            // Use previous week's weapon for current expected damage
+                            const prevWeaponTier = weekIndex === 0 ? 0 : getWeaponDropTier(weekIndex - 1, totalWeeks);
+                            const currentWeaponBonus = calculateAvgWeaponDamage(prevWeaponTier);
                             const avgDamagePerHit = 10.5 + expectedLevel + currentWeaponBonus;
 
-                            const toughness = isBoss ? 1.5 : 1.0;
-                            const hp = Math.ceil(budgetedWorkoutsForThisEnemy * avgDamagePerHit * toughness);
+                            const toughness = isFinalBoss ? 1.5 : (typeInWeek === 2 ? 1.1 : 0.9);
+                            const hp = Math.ceil(budgetedWorkouts * avgDamagePerHit * toughness);
 
                             const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
-                            const finalDescription = (i === 0 && initialEnemy) ? data.description : `${data.description} Beware its ${spell}!`;
+                            const finalDescription = (i === 2 && weekIndex === 0 && initialEnemy)
+                                ? data.description
+                                : `${data.description} Beware its ${spell}!`;
 
                             return {
                                 name: data.name,
@@ -512,6 +530,7 @@ export const forgeAhead = async (req: Request, res: Response) => {
                 data: {
                     level: hitGoal ? p.level + 1 : p.level,
                     workoutsThisWeek: 0,
+                    bountyScore: 0,
                     isLootDisqualified: false,
                     isInspired: nextInspired,
                     isCursed: nextCursed,
@@ -519,27 +538,72 @@ export const forgeAhead = async (req: Request, res: Response) => {
             }));
         });
 
-        // 3. Shadow Growth & Shrink Logic (Collective)
-        const penaltyPerWorkout = 15 + totalWeeks;
+        // 3. Shadow Growth (Missed Oaths spawn monsters) & Shrink Logic (Collective)
         const netMisses = summary.totalMisses - summary.totalExtras; // (Sum Goals) - (Sum Actual)
 
-        let hpAdjustment = 0;
         if (netMisses > 0) {
-            hpAdjustment = netMisses * penaltyPerWorkout;
-            summary.totalMisses = netMisses; // For display in summary modal
-            summary.shadowGrowthHP = hpAdjustment;
-        } else if (netMisses < 0) {
-            hpAdjustment = netMisses * penaltyPerWorkout; // Negative
-            summary.shadowShrinkHP = Math.abs(hpAdjustment);
-        }
+            // SHADOW GROWTH: Spawn monsters
+            summary.shadowMonstersSpawned = netMisses;
 
-        if (hpAdjustment !== 0) {
+            const shadowPool = MONSTER_TIERS.SHADOW;
             const finalBoss = await prisma.enemy.findFirst({
-                where: { campaignId: id, order: totalWeeks - 1 }
+                where: { campaignId: id, order: (totalWeeks * 3) + 1000 }, // Dummy high but we'll find the max
+                orderBy: { order: 'desc' }
+            }) || await prisma.enemy.findFirst({
+                where: { campaignId: id },
+                orderBy: { order: 'desc' }
+            });
+
+            if (finalBoss) {
+                const bossOrder = finalBoss.order;
+
+                // Shift boss order up by netMisses
+                await prisma.enemy.update({
+                    where: { id: finalBoss.id },
+                    data: { order: bossOrder + netMisses }
+                });
+
+                // Create new shadow monsters in the gap
+                for (let i = 0; i < netMisses; i++) {
+                    const data = (Math.random() > 0.5 ? shadowPool.funny : shadowPool.regular)[Math.floor(Math.random() * shadowPool.regular.length)];
+
+                    await prisma.enemy.create({
+                        data: {
+                            campaignId: id,
+                            name: data.name,
+                            description: data.description,
+                            hp: 50 + (campaign.currentWeek * 10), // Scaling weak HP
+                            maxHp: 50 + (campaign.currentWeek * 10),
+                            ac: 10,
+                            weaponDropTier: 0,
+                            order: bossOrder + i,
+                            isDead: false
+                        }
+                    });
+                }
+
+                await prisma.logEntry.create({
+                    data: {
+                        campaignId: id,
+                        type: 'system',
+                        content: JSON.stringify({
+                            message: `SHADOW_GROWTH: ${netMisses} Shadow Monsters have manifested from your missed Oaths! They stand between you and the final shadow.`
+                        })
+                    }
+                });
+            }
+        } else if (netMisses < 0) {
+            // SHADOW SHRINK: Still affects final boss HP
+            const penaltyPerWorkout = 15 + totalWeeks;
+            const hpAdjustment = netMisses * penaltyPerWorkout; // Negative
+            summary.shadowShrinkHP = Math.abs(hpAdjustment);
+
+            const finalBoss = await prisma.enemy.findFirst({
+                where: { campaignId: id },
+                orderBy: { order: 'desc' }
             });
 
             if (finalBoss && !finalBoss.isDead) {
-                // Ensure HP doesn't drop below 1 from shrinking
                 const newHP = Math.max(1, finalBoss.hp + hpAdjustment);
                 const newMaxHP = Math.max(1, finalBoss.maxHp + hpAdjustment);
 
@@ -557,9 +621,7 @@ export const forgeAhead = async (req: Request, res: Response) => {
                         campaignId: id,
                         type: 'system',
                         content: JSON.stringify({
-                            message: hpAdjustment > 0
-                                ? `SHADOW_GROWTH: The Shadow Grows. The final foe devours your weakness and gains ${hpAdjustment} HP.`
-                                : `SHADOW_RECEDES: The Shadow Recedes. The fellowship's zeal burns the darkness, stripping ${Math.abs(hpAdjustment)} HP.`
+                            message: `SHADOW_RECEDES: The fellowship's zeal burns the darkness, stripping ${Math.abs(hpAdjustment)} HP from the final foe.`
                         })
                     }
                 });

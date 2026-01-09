@@ -4,11 +4,12 @@ export interface EnemyData {
 }
 
 export const MONSTER_TIERS: Record<string, { regular: EnemyData[], funny: EnemyData[] }> = {
-    T1: {
+    WEAK: {
         regular: [
             { name: "Goblin Scout", description: "A nimble nuisance with a jagged blade and a nervous twitch." },
             { name: "Slime of Stagnation", description: "A pulsing green blob that smells of old gym bags and lost momentum." },
             { name: "Giant Rat", description: "A mange-ridden rodent that thrived on the scraps of ancient heroes." },
+            { name: "Ooze of Indolence", description: "A sluggish puddle that tries to stick to your boots and slow your pace." },
             { name: "Skeletal Trainee", description: "The remains of a warrior who forgot to stretch. Rattles with every step." }
         ],
         funny: [
@@ -18,63 +19,36 @@ export const MONSTER_TIERS: Record<string, { regular: EnemyData[], funny: EnemyD
             { name: "Sir Reginald the Nearly Fit", description: "Has been “getting back into it” since the previous king’s reign." }
         ]
     },
-    T2: {
+    MEDIUM: {
         regular: [
             { name: "Orc-Bear", description: "A terrifying fusion of brute strength and animalistic fury. Half orc, half bear, all problem." },
             { name: "Bugbear Marauder", description: "A hairy, oversized goblinoid that swings a morningstar with reckless abandon." },
-            { name: "Hobgoblin Captain", description: "A disciplined commander who leads with iron-clad strikes." },
-            { name: "Iron-Hided Boar", description: "A massive beast that charges with the force of a falling anvil." }
+            { name: "Mist-Stalking Wraith", description: "A spectral horror that drains the warmth from your muscles." },
+            { name: "Living Shadow", description: "A dark entity that mimics your movements, waiting for a moment of weakness." },
+            { name: "Hobgoblin Captain", description: "A disciplined commander who leads with iron-clad strikes." }
         ],
         funny: [
             { name: "Sir Skips-Leg-Day", description: "Broad of chest, narrow of stance, and deeply suspicious of squats." },
             { name: "Barbell Mimic", description: "Appears manageable until touched, at which point it becomes emotionally heavier than expected." },
             { name: "Duke of Poor Form", description: "Once noble, now permanently bent. Offers advice with alarming confidence." },
-            { name: "Phantom of Bad Music", description: "Haunts training halls with songs no one chose." }
+            { name: "The Ghost of January 1st", description: "Possesses great energy, only to vanish after three weeks." }
         ]
     },
-    T3: {
-        regular: [
-            { name: "Mist-Stalking Wraith", description: "A spectral horror that drains the warmth from your muscles." },
-            { name: "Living Shadow", description: "A dark entity that mimics your movements, waiting for a moment of weakness." },
-            { name: "Cursed Plate Armor", description: "A hollow suit of steel that fights with the memories of its fallen owner." },
-            { name: "Flame-Wreathed Orc", description: "A warrior born in the heart of a furnace, swinging a burning hammer." }
-        ],
-        funny: [
-            { name: "Wobbly Lich of Lost Motivation", description: "An ancient being sustained entirely by waiting to feel ready." },
-            { name: "Cardio Banshee", description: "Its shriek can be heard whenever running is mentioned casually." },
-            { name: "The Ghost of January 1st", description: "Possesses great energy, only to vanish after three weeks." },
-            { name: "Specter of Public Judgment", description: "Convinced everyone in the room is watching you specifically." }
-        ]
-    },
-    T4: {
-        regular: [
-            { name: "Eldritch Mindflayer", description: "A tentacled horror that seeks to consume your focus and ambition." },
-            { name: "Gorgon Sentinel", description: "A stone-skinned creature whose gaze can halt any momentum." },
-            { name: "Chimera of Doubt", description: "Three heads, each whispering a reason why you should stop." },
-            { name: "Void Stalker", description: "A shadow that feeds on the heat of your exertion." }
-        ],
-        funny: [
-            { name: "Overthinking Beholder", description: "Each eye projects a different plan. None of them involve starting." },
-            { name: "The Gorgon of Gaunt Glances", description: "One look from this creature can turn your motivation to stone." },
-            { name: "Snacking Hydra", description: "Cut one craving down and two more appear, each louder than the last." },
-            { name: "The Sentient Sweat-Towel", description: "Damp, heavy, and clings to you with unwanted affection." }
-        ]
-    },
-    T5: {
+    HARD: {
         regular: [
             { name: "Frost Titan", description: "A mountain of ice that seeks to freeze the forge forever." },
             { name: "Iron Golem", description: "A massive construct of pure resilience. It does not tire." },
-            { name: "Hydra of Habits", description: "Sever one old routine, and three new distractions sprout in its place." },
-            { name: "Plateau Giant", description: "A vast creature that insists nothing has changed, despite clear evidence." }
+            { name: "Chimera of Doubt", description: "Three heads, each whispering a reason why you should stop." },
+            { name: "Eldritch Mindflayer", description: "A tentacled horror that seeks to consume your focus and ambition." }
         ],
         funny: [
             { name: "The Titan of Tainted Protein", description: "A massive biological horror that smells faintly of spoiled vanilla." },
-            { name: "Invisible Dragon of Expectations", description: "Terrifying, vast, and entirely imagined." },
-            { name: "Ogre of Overdoing It", description: "Believes more is always better and rest is cowardice." },
-            { name: "The Hoarder of Hex-Dumbbells", description: "Surrounded by a fortress of paired weights it will never use." }
+            { name: "Overthinking Beholder", description: "Each eye projects a different plan. None of them involve starting." },
+            { name: "Snacking Hydra", description: "Cut one craving down and two more appear, each louder than the last." },
+            { name: "Ogre of Overdoing It", description: "Believes more is always better and rest is cowardice." }
         ]
     },
-    T6: {
+    BOSS: {
         regular: [
             { name: "Ancient Cinder Dragon", description: "The ultimate lord of the forge. Its scales are tempered in a thousand cycles." },
             { name: "Gjallar-Blight Wyrm", description: "A catastrophic beast of infinite greed that has swallowed whole civilizations of effort." },
@@ -87,15 +61,26 @@ export const MONSTER_TIERS: Record<string, { regular: EnemyData[], funny: EnemyD
             { name: "The Cardio-Cramp Drake", description: "A spindly, frantic dragon that causes side-splitting pain by looking at it." },
             { name: "Deadlift Dread-King", description: "A dragon made of solid granite plates. Lifting its gaze is harder than lifting its tail." }
         ]
+    },
+    SHADOW: {
+        regular: [
+            { name: "Shadow Monster", description: "A formless manifestation of lost Oaths. It clings to the heels of the fellowship." },
+            { name: "Void Stalker", description: "A shadow that feeds on the heat of your exertion." },
+            { name: "Echo of Weakness", description: "A flickering image of the moments you chose rest over the forge." }
+        ],
+        funny: [
+            { name: "The Sentient Sweat-Towel", description: "Damp, heavy, and clings to you with unwanted affection." },
+            { name: "Phantom of Bad Music", description: "Haunts training halls with songs no one chose." }
+        ]
     }
 };
 
-// Supporting compatibility for a bit if needed, but we should migrate
+// Supporting compatibility
 export const FUNNY_MONSTERS = Object.values(MONSTER_TIERS).flatMap(t => t.funny);
-export const EPIC_DRAGONS = MONSTER_TIERS.T6.funny.concat(MONSTER_TIERS.T6.regular);
+export const EPIC_DRAGONS = MONSTER_TIERS.BOSS.funny.concat(MONSTER_TIERS.BOSS.regular);
 export const REGULAR_MONSTERS = {
-    early: MONSTER_TIERS.T1.regular.concat(MONSTER_TIERS.T2.regular),
-    mid: MONSTER_TIERS.T3.regular.concat(MONSTER_TIERS.T4.regular),
-    late: MONSTER_TIERS.T5.regular,
-    boss: MONSTER_TIERS.T6.regular
+    early: MONSTER_TIERS.WEAK.regular,
+    mid: MONSTER_TIERS.MEDIUM.regular,
+    late: MONSTER_TIERS.HARD.regular,
+    boss: MONSTER_TIERS.BOSS.regular
 };

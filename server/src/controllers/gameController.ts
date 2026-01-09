@@ -98,56 +98,68 @@ export const performAction = async (req: Request, res: Response) => {
         if (updatedEnemy && updatedEnemy.hp <= 0) {
             isKill = true;
 
-            const eligible = await prisma.participant.findMany({
-                where: { campaignId, isLootDisqualified: false },
-                orderBy: [
-                    { bountyScore: 'desc' },
-                    { nat20Count: 'desc' },
-                    { highestSingleRoll: 'desc' },
-                    { bountyScoreUpdatedAt: 'asc' }
-                ] as any
-            });
+            let winnerId = null;
+            if (currentEnemy.weaponDropTier > 0) {
+                const eligible = await prisma.participant.findMany({
+                    where: { campaignId, isLootDisqualified: false },
+                    orderBy: [
+                        { bountyScore: 'desc' },
+                        { nat20Count: 'desc' },
+                        { highestSingleRoll: 'desc' },
+                        { bountyScoreUpdatedAt: 'asc' }
+                    ] as any
+                });
+                winnerId = eligible[0]?.id || participant.id;
 
-            const winnerId = eligible[0]?.id || participant.id;
+                // Update winner's weapon armament if the new weapon is better
+                const winner = await prisma.participant.findUnique({ where: { id: winnerId } });
+                if (winner && currentEnemy.weaponDropTier > winner.weaponTier) {
+                    await prisma.participant.update({
+                        where: { id: winnerId },
+                        data: { weaponTier: currentEnemy.weaponDropTier }
+                    });
+                }
+            }
 
             await prisma.enemy.update({
                 where: { id: currentEnemy.id },
                 data: { isDead: true, lootWinnerId: winnerId }
             });
 
-            // Update winner's weapon armament if the new weapon is better
-            const winner = await prisma.participant.findUnique({ where: { id: winnerId } });
-            if (winner && currentEnemy.weaponDropTier > winner.weaponTier) {
-                await prisma.participant.update({
-                    where: { id: winnerId },
-                    data: { weaponTier: currentEnemy.weaponDropTier }
-                });
-            }
-
             await prisma.campaign.update({
                 where: { id: campaignId },
                 data: { currentEnemyIndex: { increment: 1 } }
             });
 
-            await prisma.logEntry.create({
-                data: {
-                    campaignId,
-                    type: 'system',
-                    content: JSON.stringify({ message: `EVENT_VANQUISHED:${currentEnemy.name} has fallen! Victory to the forge!` })
-                }
-            });
+            const nextEnemyIndex = campaign.currentEnemyIndex + 1;
+            const nextEnemy = campaign.enemies.find(e => e.order === nextEnemyIndex);
 
-            await prisma.logEntry.create({
-                data: {
-                    campaignId,
-                    type: 'system',
-                    content: JSON.stringify({
-                        message: `EVENT_LOOT_CLAIMED:${eligible[0]?.name || participant.name} claims the loot!`,
-                        winnerName: eligible[0]?.name || participant.name,
-                        tier: currentEnemy.weaponDropTier
-                    })
+            if (nextEnemy && (nextEnemy.name.includes("Shadow") || nextEnemy.name.startsWith("The Shadow of"))) {
+                if (!currentEnemy.name.includes("Shadow") && !currentEnemy.name.startsWith("The Shadow of")) {
+                    await prisma.logEntry.create({
+                        data: {
+                            campaignId,
+                            type: 'system',
+                            content: JSON.stringify({ message: "EVENT_SHADOW_REALM: The fellowship crosses the threshold. Eternal night awaits." })
+                        }
+                    });
                 }
-            });
+            }
+
+            if (winnerId) {
+                const winner = await prisma.participant.findUnique({ where: { id: winnerId } });
+                await prisma.logEntry.create({
+                    data: {
+                        campaignId,
+                        type: 'system',
+                        content: JSON.stringify({
+                            message: `EVENT_LOOT_CLAIMED:${winner?.name || "A hero"} claims the loot!`,
+                            winnerName: winner?.name || "A hero",
+                            tier: currentEnemy.weaponDropTier
+                        })
+                    }
+                });
+            }
         }
 
         // Log the strike
