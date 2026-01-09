@@ -8,6 +8,7 @@ export const WEAPONS: Record<WeaponTier, Weapon> = {
   3: { tier: 3, name: "War Hammer", dice: "+3", numDice: 3, sides: 8 },
   4: { tier: 4, name: "Great Axe", dice: "+4", numDice: 4, sides: 12 },
   5: { tier: 5, name: "Legendary Dragonbane", dice: "+5", numDice: 10, sides: 10 },
+  10: { tier: 10, name: "The Big Dick of Swinging", dice: "+10", numDice: 20, sides: 10 },
 };
 
 export const DICE_COLORS = {

@@ -360,12 +360,21 @@ export default function App() {
     }
   };
 
-  const handleExitCampaign = () => {
+  const handleExitCampaign = async () => {
+    setLoading(true);
     localStorage.removeItem('forge_campaign_id');
     localStorage.removeItem('forge_participant_id');
     setCampaign(null);
-    setView('landing');
-    api.getAllCampaigns().then(list => setCampaignsList(list));
+    try {
+      const list = await api.getAllCampaigns();
+      setCampaignsList(list);
+      setView('landing');
+    } catch (e) {
+      console.error(e);
+      setView('landing');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -456,7 +465,8 @@ export default function App() {
   const handleForgeOnwards = async () => {
     if (nextVillainName.trim()) {
       try {
-        await api.renameEnemy(campaign.id, campaign.currentEnemyIndex, nextVillainName.trim(), nextVillainDesc.trim());
+        const updated = await api.renameEnemy(campaign.id, campaign.currentEnemyIndex, nextVillainName.trim(), nextVillainDesc.trim());
+        if (updated) setCampaign(updated);
       } catch (e) {
         console.error("Rename failed", e);
       }
@@ -473,7 +483,7 @@ export default function App() {
 
   // --- Renders ---
 
-  if (loading && !campaign) return <div className="flex items-center justify-center min-h-screen animate-pulse text-2xl font-black uppercase tracking-widest">Igniting Forge...</div>;
+  if (loading && !campaign && campaignsList.length === 0) return <div className="flex items-center justify-center min-h-screen animate-pulse text-2xl font-black uppercase tracking-widest">Igniting Forge...</div>;
 
   // LANDING (Now acts as Campaign List)
   if (view === 'landing') {

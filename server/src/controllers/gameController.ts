@@ -115,6 +115,15 @@ export const performAction = async (req: Request, res: Response) => {
                 data: { isDead: true, lootWinnerId: winnerId }
             });
 
+            // Update winner's weapon armament if the new weapon is better
+            const winner = await prisma.participant.findUnique({ where: { id: winnerId } });
+            if (winner && currentEnemy.weaponDropTier > winner.weaponTier) {
+                await prisma.participant.update({
+                    where: { id: winnerId },
+                    data: { weaponTier: currentEnemy.weaponDropTier }
+                });
+            }
+
             await prisma.campaign.update({
                 where: { id: campaignId },
                 data: { currentEnemyIndex: { increment: 1 } }

@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import { MONSTER_TIERS } from '../data/enemies';
 import { ENEMY_SPELLS } from '../data/content';
 import { calculateAvgWeaponDamage, getWeaponDropTier } from '../constants';
+import { getIO } from '../socket';
 import bcrypt from 'bcryptjs';
 
 // Helper for damage calculation
@@ -640,10 +641,10 @@ export const renameEnemy = async (req: Request, res: Response) => {
 
         if (!enemy) return res.status(404).json({ error: "Enemy not found" });
 
-        const campaign = await prisma.campaign.findUnique({
+        const campaignRecord = await prisma.campaign.findUnique({
             where: { id: enemy.campaignId }
         });
-        const config = campaign ? JSON.parse(campaign.config) : {};
+        const config = campaignRecord ? JSON.parse(campaignRecord.config) : {};
         const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
         const isFinalBoss = Number(order) === totalWeeks - 1;
 
@@ -672,7 +673,21 @@ export const renameEnemy = async (req: Request, res: Response) => {
             }
         });
 
-        res.json(updated);
+        const io = getIO();
+        const updatedCampaign = await prisma.campaign.findUnique({
+            where: { id },
+            include: {
+                participants: { orderBy: { id: 'asc' } },
+                enemies: { orderBy: { order: 'asc' } },
+                logs: { orderBy: { timestamp: 'desc' }, take: 50 }
+            }
+        });
+
+        if (updatedCampaign) {
+            io.to(id).emit('gamestate_update', updatedCampaign);
+        }
+
+        res.json(updatedCampaign);
     } catch (error) {
         console.error('Rename enemy error:', error);
         res.status(500).json({ error: 'Internal server error' });
