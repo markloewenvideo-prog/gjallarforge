@@ -374,7 +374,9 @@ export default function App() {
     setView('landing');
   };
 
-  const handleDeleteCampaign = async (id?: string) => {
+  const handleDeleteCampaign = async (idOrEvent?: string | React.MouseEvent) => {
+    // If it's a click event, ignore it and use the current campaign id
+    const id = typeof idOrEvent === 'string' ? idOrEvent : undefined;
     const targetId = id || campaign?.id;
     if (!targetId) return;
 

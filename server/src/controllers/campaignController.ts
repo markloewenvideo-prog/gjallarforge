@@ -23,7 +23,13 @@ export const createCampaign = async (req: Request, res: Response) => {
 
         // Handle config being passed as a string (from our API service)
         const config = typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig;
-        const name = (rawName || "The Gjallar Forge").trim();
+
+        // Handle naming convention: Forge 1, Forge 2...
+        let name = (rawName || "").trim();
+        if (!name) {
+            const count = await prisma.campaign.count();
+            name = `Forge ${count + 1}`;
+        }
 
         if (!config || !participantsNames || !Array.isArray(participantsNames)) {
             return res.status(400).json({ error: "Missing required fields or invalid participants list" });
