@@ -144,6 +144,38 @@ export default function App() {
   const [nextVillainName, setNextVillainName] = useState("");
   const [nextVillainDesc, setNextVillainDesc] = useState("");
 
+  // Shadow Mode Logic (Top Level for Hook Safety)
+  // Ensure safe usage even if campaign is null (e.g. create view)
+  const currentEnemy = React.useMemo(() => {
+    if (!campaign?.enemies) return null;
+    return campaign.enemies.find((e: any) => !e.isDead && e.order >= (campaign.currentEnemyIndex || 0));
+  }, [campaign]);
+
+  const isShadowMode = React.useMemo(() => {
+    if (!campaign) return false;
+    if (campaign.isCompleted) return false;
+    if (!currentEnemy) return false;
+    return currentEnemy.type === 'SHADOW' || currentEnemy.type === 'BOSS';
+  }, [campaign, currentEnemy]);
+
+  // Dark Mode Theme Toggle
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isShadowMode) {
+      root.style.setProperty('--parchment-bg', '#1a1714'); // Dark Charcoal
+      root.style.setProperty('--table-bg', '#0f0e0c');    // Pitch Black
+      root.style.setProperty('--ink-color', '#fdf6e3');   // Light Beige Text
+      root.style.setProperty('--card-bg', '#2b2620');     // Dark Brown Card
+      root.style.setProperty('--pencil-color', '#a8a29e'); // Stone Gray for borders
+    } else {
+      root.style.setProperty('--parchment-bg', '#fdf6e3'); // Original App Light Beige
+      root.style.setProperty('--table-bg', '#d9c5a3');
+      root.style.setProperty('--ink-color', '#3a352f');
+      root.style.setProperty('--card-bg', '#fdf6e3');      // Match parchment for cards in light mode
+      root.style.setProperty('--pencil-color', '#5c5346');
+    }
+  }, [isShadowMode]);
+
   // --- Effects ---
 
   // Initialization
@@ -700,31 +732,6 @@ export default function App() {
   const config = JSON.parse(campaign.config);
   const participants = campaign.participants;
 
-  // Shadow Mode Logic: Active when fighting Shadow/Boss and campaign is not over
-  const currentEnemy = (campaign.enemies || []).find((e: any) => !e.isDead && e.order >= (campaign.currentEnemyIndex || 0));
-  const isShadowMode = React.useMemo(() => {
-    if (campaign.isCompleted) return false; // Revert for Hall of Victory? Or keep it? "Until Hall of Heroes" implies revert.
-    if (!currentEnemy) return false;
-    return currentEnemy.type === 'SHADOW' || currentEnemy.type === 'BOSS';
-  }, [campaign.isCompleted, currentEnemy]);
-
-  // Dark Mode Theme Toggle
-  useEffect(() => {
-    const root = document.documentElement;
-    if (isShadowMode) {
-      root.style.setProperty('--parchment-bg', '#1a1714'); // Dark Charcoal
-      root.style.setProperty('--table-bg', '#0f0e0c');    // Pitch Black
-      root.style.setProperty('--ink-color', '#fdf6e3');   // Light Beige Text
-      root.style.setProperty('--card-bg', '#2b2620');     // Dark Brown Card
-      root.style.setProperty('--pencil-color', '#a8a29e'); // Stone Gray for borders
-    } else {
-      root.style.setProperty('--parchment-bg', '#fdf6e3'); // Original App Light Beige
-      root.style.setProperty('--table-bg', '#d9c5a3');
-      root.style.setProperty('--ink-color', '#3a352f');
-      root.style.setProperty('--card-bg', '#fdf6e3');      // Match parchment for cards in light mode
-      root.style.setProperty('--pencil-color', '#5c5346');
-    }
-  }, [isShadowMode]);
 
   // HP-Based Progress Calculation (Excluding Shadows)
   const regularEnemies = (campaign.enemies || []).filter((e: any) => e.type !== 'SHADOW');
