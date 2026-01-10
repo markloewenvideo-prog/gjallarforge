@@ -979,12 +979,17 @@ export default function App() {
                     const prev = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex - 1);
                     const wasPrevRegular = prev?.type === 'REGULAR' || !prev?.type;
 
-                    if (wasPrevRegular && isNextShadowPhase) {
+                    if (wasPrevRegular) {
+                      const isBossRitual = isNextShadowPhase;
                       return (
                         <div className="text-left space-y-4 animate-in slide-in-from-bottom-2 duration-500">
-                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 text-center mb-4">Name Your Final Shadow</div>
+                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 text-center mb-4">
+                            {isBossRitual ? "Name Your Final Shadow" : "Ritual of Succession"}
+                          </div>
                           <div className="space-y-1">
-                            <label className="text-[9px] font-bold uppercase opacity-30 ml-2">The Boss's Identity (Name)</label>
+                            <label className="text-[9px] font-bold uppercase opacity-30 ml-2">
+                              {isBossRitual ? "The Boss's Identity (Name)" : "The Shadow's Identity (Name)"}
+                            </label>
                             <input
                               className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-lg outline-none focus:border-[#3a352f]/40 transition-all text-center"
                               placeholder="e.g. Malakor the Grim"
@@ -993,7 +998,9 @@ export default function App() {
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[9px] font-bold uppercase opacity-30 ml-2">The Boss's Legend (Flavor)</label>
+                            <label className="text-[9px] font-bold uppercase opacity-30 ml-2">
+                              {isBossRitual ? "The Boss's Legend (Flavor)" : "The Shadow's Legend (Flavor)"}
+                            </label>
                             <textarea
                               className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-sm outline-none focus:border-[#3a352f]/40 transition-all min-h-[80px] text-center"
                               rows={2}
