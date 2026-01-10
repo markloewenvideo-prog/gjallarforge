@@ -1081,10 +1081,10 @@ export default function App() {
                   </section>
 
                   {/* Shadow Growth & Shrink */}
-                  <section className={`${(resolutionData.netMisses || 0) < 0 ? 'bg-green-600/5 border-green-600/10' : 'bg-[#8b0000]/5 border-[#8b0000]/10'} border p-6 relative overflow-hidden`}>
-                    <div className="absolute top-0 right-0 p-2 opacity-5 text-4xl font-black">{(resolutionData.netMisses || 0) < 0 ? '✨' : '🌑'}</div>
-                    <h4 className={`text-[10px] font-bold uppercase tracking-widest ${(resolutionData.netMisses || 0) < 0 ? 'text-green-700' : 'text-[#8b0000]'} mb-2`}>
-                      {(resolutionData.netMisses || 0) < 0 ? 'The Shadow Recedes' : 'The Shadow Grows'}
+                  <section className={`${(resolutionData.netMisses || 0) < 0 ? 'bg-green-600/5 border-green-600/10' : (resolutionData.netMisses || 0) > 0 ? 'bg-[#8b0000]/5 border-[#8b0000]/10' : 'bg-gray-600/5 border-gray-600/10'} border p-6 relative overflow-hidden`}>
+                    <div className="absolute top-0 right-0 p-2 opacity-5 text-4xl font-black">{(resolutionData.netMisses || 0) < 0 ? '✨' : (resolutionData.netMisses || 0) > 0 ? '🌑' : '⚖️'}</div>
+                    <h4 className={`text-[10px] font-bold uppercase tracking-widest ${(resolutionData.netMisses || 0) < 0 ? 'text-green-700' : (resolutionData.netMisses || 0) > 0 ? 'text-[#8b0000]' : 'text-gray-700'} mb-2`}>
+                      {(resolutionData.netMisses || 0) < 0 ? 'The Shadow Recedes' : (resolutionData.netMisses || 0) > 0 ? 'The Shadow Grows' : 'The Shadow Holds'}
                     </h4>
                     {(resolutionData.netMisses || 0) < 0 ? (
                       <>
@@ -1107,7 +1107,7 @@ export default function App() {
                       </>
                     ) : (
                       <p className="text-[11px] italic opacity-70 leading-relaxed">
-                        The balance is maintained. The shadows neither grow nor recede this cycle.
+                        The fellowship has kept their Oaths. The shadow waits, unchanging.
                       </p>
                     )}
                   </section>

@@ -780,6 +780,26 @@ export const enterShadowRealm = async (req: Request, res: Response) => {
 
         await prisma.$transaction(updates);
 
+        // Log the Final Shadow naming
+        if (boss && bossName && bossName.trim()) {
+            let finalBossName = bossName.trim();
+            if (!finalBossName.startsWith("The Shadow of")) {
+                finalBossName = `The Shadow of ${finalBossName}`;
+            }
+
+            await prisma.logEntry.create({
+                data: {
+                    campaignId: id,
+                    type: 'system',
+                    content: JSON.stringify({
+                        message: `A New Threat Emerges: ${finalBossName}`,
+                        enemyName: finalBossName,
+                        description: bossDescription || boss.description
+                    })
+                }
+            });
+        }
+
         // Update current enemy index to start the gauntlet if it's not already there
         // (Usually it will be at 'startOrder' after the last regular is defeated)
         // No explicit update needed if UI/handleForgeOnwards handles the increment.
@@ -798,7 +818,7 @@ export const enterShadowRealm = async (req: Request, res: Response) => {
                 campaignId: id,
                 type: 'system',
                 content: JSON.stringify({
-                    message: `EVENT_SHADOW_REALM: The fellowship enters the Shadow Realm! ${shadowMonsters.length} Shadows of Failure stand between you and the ${boss?.name || 'Final Shadow'}.`
+                    message: `EVENT_SHADOW_REALM: The fellowship enters the Shadow Realm! ${shadowMonsters.length} Shadows of Failure stand between you and the final confrontation.`
                 })
             }
         });
