@@ -24,8 +24,12 @@ export const WEAPONS = {
 
 // Helper function to get weapon data for any tier, including 21+
 export const getWeapon = (tier: number) => {
-    if (tier <= 20) {
-        return WEAPONS[tier as keyof typeof WEAPONS] || WEAPONS[0];
+    // Handle shadow monsters or uninitialized tiers
+    if (tier < 0) return WEAPONS[0]; // Fallback to lowest tier
+
+    // Existing logic for strictly defined tiers
+    if (WEAPONS[tier as keyof typeof WEAPONS]) {
+        return WEAPONS[tier as keyof typeof WEAPONS];
     }
     // Tier 21+ is "Cosmic Power"
     return { tier, name: "Cosmic Power", bonus: tier };

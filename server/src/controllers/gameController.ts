@@ -52,18 +52,39 @@ export const performAction = async (req: Request, res: Response) => {
             return;
         }
 
-        // Calculate weapon tier for current enemy if not yet set (skip Shadow Monsters)
-        if (currentEnemy.weaponDropTier === 0 && currentEnemy.type !== 'SHADOW') {
-            const currentCycle = campaign.currentWeek || 1;
-            const calculatedTier = calculateWeaponTierForCycle(currentCycle);
-
-            await prisma.enemy.update({
-                where: { id: currentEnemy.id },
-                data: { weaponDropTier: calculatedTier }
+        // Initialize enemy if not yet set (tier 0 means uninitialized)
+        if (currentEnemy.weaponDropTier === 0) {
+            // Log new enemy emergence for ALL enemy types
+            await prisma.logEntry.create({
+                data: {
+                    campaignId,
+                    type: 'system',
+                    content: JSON.stringify({
+                        message: `A New Threat Emerges: ${currentEnemy.name}`
+                    })
+                }
             });
 
-            // Update the currentEnemy object with the new tier
-            currentEnemy.weaponDropTier = calculatedTier;
+            if (currentEnemy.type === 'SHADOW') {
+                // Mark Shadow Monsters as initialized but with no loot (-1)
+                await prisma.enemy.update({
+                    where: { id: currentEnemy.id },
+                    data: { weaponDropTier: -1 }
+                });
+                currentEnemy.weaponDropTier = -1;
+            } else {
+                // Calculate and set weapon tier for regular enemies
+                const currentCycle = campaign.currentWeek || 1;
+                const calculatedTier = calculateWeaponTierForCycle(currentCycle);
+
+                await prisma.enemy.update({
+                    where: { id: currentEnemy.id },
+                    data: { weaponDropTier: calculatedTier }
+                });
+
+                // Update the currentEnemy object with the new tier
+                currentEnemy.weaponDropTier = calculatedTier;
+            }
         }
 
         // Ensure currentEnemyIndex is synced to this enemy's order if it was a gap
@@ -246,37 +267,57 @@ export const performAction = async (req: Request, res: Response) => {
                 where: { campaignId, order: currentEnemy.order + 1 }
             });
 
-            // Calculate weapon tier for the next enemy based on current cycle (skip Shadow Monsters)
-            if (nextEnemy && nextEnemy.weaponDropTier === 0 && nextEnemy.type !== 'SHADOW') {
-                const updatedCampaign = await prisma.campaign.findUnique({
-                    where: { id: campaignId },
-                    select: { currentWeek: true }
+            // Initialize next enemy if not yet set
+            if (nextEnemy && nextEnemy.weaponDropTier === 0) {
+                // Log new enemy emergence for ALL enemy types
+                await prisma.logEntry.create({
+                    data: {
+                        campaignId,
+                        type: 'system',
+                        content: JSON.stringify({
+                            message: `A New Threat Emerges: ${nextEnemy.name}`
+                        })
+                    }
                 });
-                const currentCycle = updatedCampaign?.currentWeek || 1;
-                const calculatedTier = calculateWeaponTierForCycle(currentCycle);
 
-                await prisma.enemy.update({
-                    where: { id: nextEnemy.id },
-                    data: { weaponDropTier: calculatedTier }
-                });
-
-                // Log rare loot detection if weapon is 2+ tiers above cycle
-                if (calculatedTier >= currentCycle + 2) {
-                    // Calculate probability using cumulative normal distribution
-                    // P(X >= calculatedTier) where X ~ Normal(currentCycle, 1.5²)
-                    const z = (calculatedTier - 0.5 - currentCycle) / 1.5; // Continuity correction
-                    const probability = 0.5 * (1 - erf(z / Math.sqrt(2))); // Upper tail probability
-                    const percentChance = (probability * 100).toFixed(2);
-
-                    await prisma.logEntry.create({
-                        data: {
-                            campaignId,
-                            type: 'system',
-                            content: JSON.stringify({
-                                message: `RARE_LOOT_DETECTED: ${getWeapon(calculatedTier).name} (Tier ${calculatedTier}) - ${percentChance}% chance!`
-                            })
-                        }
+                if (nextEnemy.type === 'SHADOW') {
+                    // Mark Shadow Monsters as initialized but with no loot (-1)
+                    await prisma.enemy.update({
+                        where: { id: nextEnemy.id },
+                        data: { weaponDropTier: -1 }
                     });
+                } else {
+                    // Calculate and set weapon tier for regular enemies
+                    const updatedCampaign = await prisma.campaign.findUnique({
+                        where: { id: campaignId },
+                        select: { currentWeek: true }
+                    });
+                    const currentCycle = updatedCampaign?.currentWeek || 1;
+                    const calculatedTier = calculateWeaponTierForCycle(currentCycle);
+
+                    await prisma.enemy.update({
+                        where: { id: nextEnemy.id },
+                        data: { weaponDropTier: calculatedTier }
+                    });
+
+                    // Log rare loot detection if weapon is 2+ tiers above cycle
+                    if (calculatedTier >= currentCycle + 2) {
+                        // Calculate probability using cumulative normal distribution
+                        // P(X >= calculatedTier) where X ~ Normal(currentCycle, 1.5²)
+                        const z = (calculatedTier - 0.5 - currentCycle) / 1.5; // Continuity correction
+                        const probability = 0.5 * (1 - erf(z / Math.sqrt(2))); // Upper tail probability
+                        const percentChance = (probability * 100).toFixed(2);
+
+                        await prisma.logEntry.create({
+                            data: {
+                                campaignId,
+                                type: 'system',
+                                content: JSON.stringify({
+                                    message: `RARE_LOOT_DETECTED: ${getWeapon(calculatedTier).name} (Tier ${calculatedTier}) - ${percentChance}% chance!`
+                                })
+                            }
+                        });
+                    }
                 }
             }
 

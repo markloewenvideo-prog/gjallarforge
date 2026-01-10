@@ -224,46 +224,76 @@ export const getCampaign = async (req: Request, res: Response) => {
             return;
         }
 
-        // Calculate weapon tier for current enemy if not yet set (skip Shadow Monsters)
+        // Initialize enemy if not yet set (tier 0 means uninitialized)
         const currentEnemy = campaign.enemies.find(e => !e.isDead && e.order >= (campaign.currentEnemyIndex || 0));
-        if (currentEnemy && currentEnemy.weaponDropTier === 0 && currentEnemy.type !== 'SHADOW') {
-            const currentCycle = campaign.currentWeek || 1;
-            const { calculateWeaponTierForCycle } = await import('../constants');
-            const calculatedTier = calculateWeaponTierForCycle(currentCycle);
-
-            await prisma.enemy.update({
-                where: { id: currentEnemy.id },
-                data: { weaponDropTier: calculatedTier }
+        if (currentEnemy && currentEnemy.weaponDropTier === 0) {
+            // Log new enemy emergence for ALL enemy types
+            await prisma.logEntry.create({
+                data: {
+                    campaignId: id,
+                    type: 'system',
+                    content: JSON.stringify({
+                        message: `A New Threat Emerges: ${currentEnemy.name}`
+                    })
+                }
             });
 
-            // Log rare loot detection if weapon is 2+ tiers above cycle
-            if (calculatedTier >= currentCycle + 2) {
-                const { getWeapon } = await import('../constants');
-                // Calculate probability using cumulative normal distribution
-                const erf = (x: number): number => {
-                    const sign = x >= 0 ? 1 : -1;
-                    x = Math.abs(x);
-                    const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
-                    const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
-                    const t = 1.0 / (1.0 + p * x);
-                    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
-                    return sign * y;
-                };
-
-                const z = (calculatedTier - 0.5 - currentCycle) / 1.5;
-                const probability = 0.5 * (1 - erf(z / Math.sqrt(2)));
-                const percentChance = (probability * 100).toFixed(2);
-
-                await prisma.logEntry.create({
-                    data: {
-                        campaignId: id,
-                        type: 'system',
-                        content: JSON.stringify({
-                            message: `RARE_LOOT_DETECTED: ${getWeapon(calculatedTier).name} (Tier ${calculatedTier}) - ${percentChance}% chance!`
-                        })
-                    }
+            if (currentEnemy.type === 'SHADOW') {
+                // Mark Shadow Monsters as initialized but with no loot (-1)
+                await prisma.enemy.update({
+                    where: { id: currentEnemy.id },
+                    data: { weaponDropTier: -1 }
                 });
+            } else {
+                // Calculate and set weapon tier for regular enemies
+                const currentCycle = campaign.currentWeek || 1;
+                const { calculateWeaponTierForCycle } = await import('../constants');
+                const calculatedTier = calculateWeaponTierForCycle(currentCycle);
+
+                await prisma.enemy.update({
+                    where: { id: currentEnemy.id },
+                    data: { weaponDropTier: calculatedTier }
+                });
+
+                // Log rare loot detection if weapon is 2+ tiers above cycle
+                if (calculatedTier >= currentCycle + 2) {
+                    const { getWeapon } = await import('../constants');
+                    // Calculate probability using cumulative normal distribution
+                    // ... (erf function and implementation)
+                    // Simplified since I can't easily re-declare erf here inside the replace block if it's large, 
+                    // but wait, I can just include the whole block.
+                    // Actually, to avoid complexity/errors with re-declaring the helper function inside this block 
+                    // if it wasn't there before or was different, I should check the context.
+                    // The previous file content shows the erf definition was inside the block.
+                    // I will just copy the existing logic but wrapped in the else.
+
+                    const erf = (x: number): number => {
+                        const sign = x >= 0 ? 1 : -1;
+                        x = Math.abs(x);
+                        const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+                        const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+                        const t = 1.0 / (1.0 + p * x);
+                        const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+                        return sign * y;
+                    };
+
+                    const z = (calculatedTier - 0.5 - currentCycle) / 1.5;
+                    const probability = 0.5 * (1 - erf(z / Math.sqrt(2)));
+                    const percentChance = (probability * 100).toFixed(2);
+
+                    await prisma.logEntry.create({
+                        data: {
+                            campaignId: id,
+                            type: 'system',
+                            content: JSON.stringify({
+                                message: `RARE_LOOT_DETECTED: ${getWeapon(calculatedTier).name} (Tier ${calculatedTier}) - ${percentChance}% chance!`
+                            })
+                        }
+                    });
+                }
             }
+
+            // Refresh campaign (existing logic continues...)
 
             // Refresh campaign data to include the updated weapon tier
             const updatedCampaign = await prisma.campaign.findUnique({
