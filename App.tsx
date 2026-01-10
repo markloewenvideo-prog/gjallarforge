@@ -162,7 +162,7 @@ export default function App() {
   useEffect(() => {
     const root = document.documentElement;
     if (isShadowMode) {
-      root.style.setProperty('--parchment-bg', '#1a1714'); // Dark Charcoal
+      root.style.setProperty('--parchment-bg', '#000000'); // Pure Black
       root.style.setProperty('--table-bg', '#0f0e0c');    // Pitch Black
       root.style.setProperty('--ink-color', '#fdf6e3');   // Light Beige Text
       root.style.setProperty('--card-bg', '#2b2620');     // Dark Brown Card
@@ -532,10 +532,14 @@ export default function App() {
     if (!victoryData) return;
 
     // Check if we are transitioning to Shadow Realm
-    const next = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex);
-    const isNextShadowPhase = next?.type === 'SHADOW' || next?.type === 'BOSS' || !next;
-    const prev = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex - 1);
-    const wasPrevRegular = prev?.type === 'REGULAR' || !prev?.type;
+    // Use >= logic to handle potential gaps in enemy orders (caused by deletion bugs or glitches)
+    const nextEnemy = (campaign.enemies || []).filter((e: any) => !e.isDead && e.order >= campaign.currentEnemyIndex).sort((a: any, b: any) => a.order - b.order)[0];
+
+    // If NO regular enemies are left, or the next one is Shadow/Boss, trigger Intro
+    const isNextShadowPhase = !nextEnemy || nextEnemy.type === 'SHADOW' || nextEnemy.type === 'BOSS';
+
+    const prev = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex - 1); // This strictly might fail if gap, but purely for `wasPrevRegular` check
+    const wasPrevRegular = !prev || prev.type === 'REGULAR'; // Default to true if prev missing (start of game?)
 
     if (isNextShadowPhase && wasPrevRegular) {
       setVictoryData(null);
@@ -968,7 +972,7 @@ export default function App() {
                     {/* The Slayer (Always Shown) */}
                     <div>
                       <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">
-                        Slayer of the Shadow
+                        Slayer of the Beast
                       </div>
                       <div className="text-3xl font-black uppercase tracking-tight text-[#8b0000]">
                         {victoryData.killer.name}
@@ -998,9 +1002,18 @@ export default function App() {
 
                   {victoryData.weaponTier > 0 && (
                     <div className="text-center mb-4 relative">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-2">Bequeathed Armament</div>
-                      <div className="text-xl font-black uppercase tracking-tight py-2 px-4 border-2 border-[var(--pencil-color)]/20 inline-block bg-white/40">
-                        {getWeapon(victoryData.weaponTier).name}
+                      <div className="h-px bg-[#5c5346]/20 w-32 mx-auto mb-6" />
+
+                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">
+                        Bequeathed Armament
+                      </div>
+                      <div className="p-4 bg-[#3a352f]/5 border-2 border-[var(--pencil-color)]/20 inline-block min-w-[200px] mb-2">
+                        <div className="text-xl font-black uppercase tracking-wide text-[var(--ink-color)]">
+                          {getWeapon(victoryData.weaponTier).name}
+                        </div>
+                      </div>
+                      <div className="text-[9px] font-bold uppercase tracking-widest opacity-50">
+                        Granted to <span className="text-[var(--ink-color)]">{victoryData.winner.name}</span>
                       </div>
                       <div className="mt-2 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-[0.2em] opacity-50">
                         <span className="pencil-font text-xs tracking-tighter">Strike Bonus: +{getWeapon(victoryData.weaponTier).bonus}</span>

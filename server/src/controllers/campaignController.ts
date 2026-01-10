@@ -200,16 +200,6 @@ export const createCampaign = async (req: Request, res: Response) => {
                     data: { weaponDropTier: calculatedTier }
                 });
 
-                // Log the first emergence
-                await prisma.logEntry.create({
-                    data: {
-                        campaignId: campaign.id,
-                        type: 'system',
-                        content: JSON.stringify({
-                            message: `A New Threat Emerges: ${dbFirstEnemy.name}`
-                        })
-                    }
-                });
             }
         }
 
