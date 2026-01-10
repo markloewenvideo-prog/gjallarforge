@@ -202,10 +202,21 @@ export const performAction = async (req: Request, res: Response) => {
             }
         });
 
-        const updatedEnemy = await prisma.enemy.findUnique({ where: { id: currentEnemy.id } });
-        let isKill = false;
-        if (updatedEnemy && updatedEnemy.hp <= 0) {
-            isKill = true;
+        // Check if we claimed the kill atomically
+        // Attempt to mark as dead ONLY if it is currently alive and has <= 0 HP
+        // This prevents race conditions where multiple requests might think they killed it.
+        const claimKill = await prisma.enemy.updateMany({
+            where: {
+                id: currentEnemy.id,
+                isDead: false,
+                hp: { lte: 0 }
+            },
+            data: { isDead: true }
+        });
+
+        const isClaimedKill = claimKill.count > 0;
+
+        if (isClaimedKill) {
 
             if (currentEnemy.weaponDropTier > 0) {
                 // Fetch all participants sorted by Bounty Score (The Fair Sweat Rule)
@@ -250,13 +261,42 @@ export const performAction = async (req: Request, res: Response) => {
                             data: { weaponTier: calculatedTier }
                         });
                     }
+
+                    // Update loot winner ID (since we already set isDead in the claimKill step)
+                    await prisma.enemy.update({
+                        where: { id: currentEnemy.id },
+                        data: { lootWinnerId: winnerId }
+                    });
+
+                    // Log rare loot detection if weapon is 2+ tiers above cycle
+                    if (calculatedTier >= currentCycle + 2) {
+                        // Inline erf helper
+                        const erf = (x: number): number => {
+                            const sign = x >= 0 ? 1 : -1;
+                            x = Math.abs(x);
+                            const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+                            const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+                            const t = 1.0 / (1.0 + p * x);
+                            const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+                            return sign * y;
+                        };
+
+                        const z = (calculatedTier - 0.5 - currentCycle) / 1.5;
+                        const probability = 0.5 * (1 - erf(z / Math.sqrt(2)));
+                        const percentChance = (probability * 100).toFixed(2);
+
+                        await prisma.logEntry.create({
+                            data: {
+                                campaignId,
+                                type: 'system',
+                                content: JSON.stringify({
+                                    message: `RARE_LOOT_DETECTED: ${getWeapon(calculatedTier).name} (Tier ${calculatedTier}) - ${percentChance}% chance!`
+                                })
+                            }
+                        });
+                    }
                 }
             }
-
-            await prisma.enemy.update({
-                where: { id: currentEnemy.id },
-                data: { isDead: true, lootWinnerId: winnerId }
-            });
 
             await prisma.campaign.update({
                 where: { id: campaignId },
@@ -299,53 +339,38 @@ export const performAction = async (req: Request, res: Response) => {
                         where: { id: nextEnemy.id },
                         data: { weaponDropTier: calculatedTier }
                     });
-
-                    // Log rare loot detection if weapon is 2+ tiers above cycle
-                    if (calculatedTier >= currentCycle + 2) {
-                        // Calculate probability using cumulative normal distribution
-                        // P(X >= calculatedTier) where X ~ Normal(currentCycle, 1.5²)
-                        const z = (calculatedTier - 0.5 - currentCycle) / 1.5; // Continuity correction
-                        const probability = 0.5 * (1 - erf(z / Math.sqrt(2))); // Upper tail probability
-                        const percentChance = (probability * 100).toFixed(2);
-
-                        await prisma.logEntry.create({
-                            data: {
-                                campaignId,
-                                type: 'system',
-                                content: JSON.stringify({
-                                    message: `RARE_LOOT_DETECTED: ${getWeapon(calculatedTier).name} (Tier ${calculatedTier}) - ${percentChance}% chance!`
-                                })
-                            }
-                        });
-                    }
                 }
             }
 
-            const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
-
-            if (nextEnemy && (nextEnemy.type === 'BOSS' || nextEnemy.weaponDropTier === 0)) {
-                // --- APPLY BLESSED STATUS ---
-                const participants = await prisma.participant.findMany({ where: { campaignId } });
+            // --- SHADOW REALM STATUS CHECK ---
+            // The variable `nextEnemy` was defined in the block above. Let's reuse it.
+            if (nextEnemy && (nextEnemy.type === 'BOSS' || (nextEnemy.name.startsWith("The Shadow") && !currentEnemy.name.startsWith("The Shadow")))) {
+                const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
                 const workoutsPerWeek = Number(config.workoutsPerWeek || 3);
-                // The Shadow Realm begins after (Total Weeks - 1) worth of workouts
                 const totalPossible = workoutsPerWeek * (totalWeeks - 1);
 
+                const participants = await prisma.participant.findMany({ where: { campaignId } });
+
+                let anyBlessed = false;
                 for (const p of participants) {
-                    if (p.totalWorkouts >= totalPossible) {
+                    if (p.totalWorkouts >= totalPossible && !p.isBlessed) {
                         await prisma.participant.update({
                             where: { id: p.id },
                             data: { isBlessed: true, isInspired: false, isCursed: false }
                         });
+                        anyBlessed = true;
                     }
                 }
 
-                await prisma.logEntry.create({
-                    data: {
-                        campaignId,
-                        type: 'system',
-                        content: JSON.stringify({ message: "EVENT_SHADOW_REALM: The fellowship crosses the threshold. Those who kept their Oaths are BLESSED." })
-                    }
-                });
+                if (anyBlessed) {
+                    await prisma.logEntry.create({
+                        data: {
+                            campaignId,
+                            type: 'system',
+                            content: JSON.stringify({ message: "EVENT_SHADOW_REALM: The fellowship crosses the threshold. Those who kept their Oaths are BLESSED." })
+                        }
+                    });
+                }
             }
 
             if (winnerId) {
@@ -378,9 +403,9 @@ export const performAction = async (req: Request, res: Response) => {
                     }
                 });
             }
-        }
+        } // End of isClaimedKill block
 
-        // Emit update
+
         // Emit update
         const io = getIO();
         const updatedCampaign = await prisma.campaign.findUnique({
@@ -396,7 +421,7 @@ export const performAction = async (req: Request, res: Response) => {
             success: true,
             roll: rawD20,
             damage,
-            killed: isKill,
+            killed: isClaimedKill,
             isCrit,
             isMiss,
             strength,
@@ -404,7 +429,7 @@ export const performAction = async (req: Request, res: Response) => {
             campaign: updatedCampaign,
             winnerName: winnerInfo?.name,
             winnerLevel: winnerInfo?.level,
-            tier: isKill ? currentEnemy.weaponDropTier : 0,
+            tier: isClaimedKill ? currentEnemy.weaponDropTier : 0,
             originalRoll,
             modificationReason
         });

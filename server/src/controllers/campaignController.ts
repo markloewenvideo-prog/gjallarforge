@@ -175,6 +175,44 @@ export const createCampaign = async (req: Request, res: Response) => {
             }
         });
 
+        // Initialize the first enemy immediately (so it's not Tier 0)
+        const firstEnemy = generatedMonsterData[0];
+        if (firstEnemy) {
+            // Shadow type check logic mirrored from other controllers
+            const isShadow = firstEnemy.type === 'BOSS' && firstEnemy.name.startsWith("The Shadow");
+            const initialTier = isShadow ? -1 : 1; // Start at Tier 1 for regular, -1 for Shadow/Boss
+
+            // Assuming we need to update the record we just created. 
+            // Better to find the created enemy.
+            const dbFirstEnemy = await prisma.enemy.findFirst({
+                where: { campaignId: campaign.id, order: 0 }
+            });
+
+            if (dbFirstEnemy) {
+                const { calculateWeaponTierForCycle } = await import('../constants');
+                // Calculate real initial tier
+                const calculatedTier = (dbFirstEnemy.type === 'SHADOW' || (dbFirstEnemy.type === 'BOSS' && dbFirstEnemy.name.startsWith("The Shadow")))
+                    ? -1
+                    : calculateWeaponTierForCycle(1);
+
+                await prisma.enemy.update({
+                    where: { id: dbFirstEnemy.id },
+                    data: { weaponDropTier: calculatedTier }
+                });
+
+                // Log the first emergence
+                await prisma.logEntry.create({
+                    data: {
+                        campaignId: campaign.id,
+                        type: 'system',
+                        content: JSON.stringify({
+                            message: `A New Threat Emerges: ${dbFirstEnemy.name}`
+                        })
+                    }
+                });
+            }
+        }
+
         res.json(campaign);
     } catch (error: any) {
         console.error('Campaign creation error:', error);
@@ -224,91 +262,12 @@ export const getCampaign = async (req: Request, res: Response) => {
             return;
         }
 
-        // Initialize enemy if not yet set (tier 0 means uninitialized)
-        const currentEnemy = campaign.enemies.find(e => !e.isDead && e.order >= (campaign.currentEnemyIndex || 0));
-        if (currentEnemy && currentEnemy.weaponDropTier === 0) {
-            // Log new enemy emergence for ALL enemy types
-            await prisma.logEntry.create({
-                data: {
-                    campaignId: id,
-                    type: 'system',
-                    content: JSON.stringify({
-                        message: `A New Threat Emerges: ${currentEnemy.name}`
-                    })
-                }
-            });
+        // We no longer lazily initialize enemies here to prevent race conditions/double logs.
+        // - createCampaign initializes the first enemy.
+        // - performAction initializes subsequent enemies upon spawn.
+        // The frontend just reads the state.
 
-            if (currentEnemy.type === 'SHADOW') {
-                // Mark Shadow Monsters as initialized but with no loot (-1)
-                await prisma.enemy.update({
-                    where: { id: currentEnemy.id },
-                    data: { weaponDropTier: -1 }
-                });
-            } else {
-                // Calculate and set weapon tier for regular enemies
-                const currentCycle = campaign.currentWeek || 1;
-                const { calculateWeaponTierForCycle } = await import('../constants');
-                const calculatedTier = calculateWeaponTierForCycle(currentCycle);
-
-                await prisma.enemy.update({
-                    where: { id: currentEnemy.id },
-                    data: { weaponDropTier: calculatedTier }
-                });
-
-                // Log rare loot detection if weapon is 2+ tiers above cycle
-                if (calculatedTier >= currentCycle + 2) {
-                    const { getWeapon } = await import('../constants');
-                    // Calculate probability using cumulative normal distribution
-                    // ... (erf function and implementation)
-                    // Simplified since I can't easily re-declare erf here inside the replace block if it's large, 
-                    // but wait, I can just include the whole block.
-                    // Actually, to avoid complexity/errors with re-declaring the helper function inside this block 
-                    // if it wasn't there before or was different, I should check the context.
-                    // The previous file content shows the erf definition was inside the block.
-                    // I will just copy the existing logic but wrapped in the else.
-
-                    const erf = (x: number): number => {
-                        const sign = x >= 0 ? 1 : -1;
-                        x = Math.abs(x);
-                        const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
-                        const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
-                        const t = 1.0 / (1.0 + p * x);
-                        const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
-                        return sign * y;
-                    };
-
-                    const z = (calculatedTier - 0.5 - currentCycle) / 1.5;
-                    const probability = 0.5 * (1 - erf(z / Math.sqrt(2)));
-                    const percentChance = (probability * 100).toFixed(2);
-
-                    await prisma.logEntry.create({
-                        data: {
-                            campaignId: id,
-                            type: 'system',
-                            content: JSON.stringify({
-                                message: `RARE_LOOT_DETECTED: ${getWeapon(calculatedTier).name} (Tier ${calculatedTier}) - ${percentChance}% chance!`
-                            })
-                        }
-                    });
-                }
-            }
-
-            // Refresh campaign (existing logic continues...)
-
-            // Refresh campaign data to include the updated weapon tier
-            const updatedCampaign = await prisma.campaign.findUnique({
-                where: { id },
-                include: {
-                    participants: { orderBy: { id: 'asc' } },
-                    enemies: { orderBy: { order: 'asc' } },
-                    logs: { orderBy: { timestamp: 'desc' }, take: 50 }
-                }
-            });
-
-            res.json(updatedCampaign);
-        } else {
-            res.json(campaign);
-        }
+        res.json(campaign);
     } catch (error) {
         console.error('Get campaign error:', error);
         res.status(500).json({ error: 'Internal server error' });
