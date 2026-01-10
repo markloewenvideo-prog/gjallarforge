@@ -17,7 +17,10 @@ export const initSocket = (server: any) => {
 
 export const getIO = () => {
     if (!io) {
-        throw new Error("Socket.io not initialized!");
+        // Safe fallback for scripts
+        return {
+            to: (room: string) => ({ emit: (ev: string, data: any) => console.log(`[SOCKET MOCK] Emit ${ev} to ${room}`) })
+        } as any;
     }
     return io;
 };

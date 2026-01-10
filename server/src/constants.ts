@@ -57,8 +57,8 @@ export const calculateWeaponTierForCycle = (currentCycle: number): number => {
     const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
     const normalValue = currentCycle + (z0 * 1.5);
 
-    // Round to nearest integer, minimum at 0, no upper cap
-    return Math.max(0, Math.round(normalValue));
+    // Round to nearest integer, minimum at 1 to avoid "Uninitialized" (0) sentinel collision
+    return Math.max(1, Math.round(normalValue));
 };
 
 export const FLAVOR_TEXT = {

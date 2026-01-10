@@ -92,7 +92,7 @@ export const createCampaign = async (req: Request, res: Response) => {
 
             // Default to "Unknown Entity" unless custom name provided
             let monsterName = "Unknown Entity";
-            let monsterDescription = "You can't quite make it out.";
+            let monsterDescription = "A boring creature, lacking all creativity.";
 
             // Apply custom naming for week 0 if it was the first monster (now index 0)
             if (i === 0 && initialEnemy?.name) {
@@ -714,6 +714,30 @@ export const renameEnemy = async (req: Request, res: Response) => {
             }
         });
 
+        // Retroactively fix the "A New Threat Emerges" log if it exists for this enemy
+        const oldNameLogPattern = `A New Threat Emerges: ${enemy.name}`;
+        const relatedLog = await prisma.logEntry.findFirst({
+            where: {
+                campaignId: id,
+                type: 'system',
+                content: { contains: oldNameLogPattern }
+            },
+            orderBy: { timestamp: 'desc' }
+        });
+
+        if (relatedLog) {
+            const content = JSON.parse(relatedLog.content);
+            content.message = `A New Threat Emerges: ${finalName}`;
+            // Update other metadata if present
+            if (content.enemyName) content.enemyName = finalName;
+            if (content.description && description) content.description = description;
+
+            await prisma.logEntry.update({
+                where: { id: relatedLog.id },
+                data: { content: JSON.stringify(content) }
+            });
+        }
+
         res.json(updated);
     } catch (error) {
         console.error('Rename enemy error:', error);
@@ -914,7 +938,7 @@ export const ascendCampaign = async (req: Request, res: Response) => {
 
             // Default to "Unknown Entity"
             let name = "Unknown Entity";
-            let description = "You can't quite make it out.";
+            let description = "A boring creature, lacking all creativity.";
 
             if (isBoss && !name.startsWith("The Shadow of")) {
                 name = `The Shadow of ${name}`;
@@ -1067,7 +1091,7 @@ export const optInToEndless = async (req: Request, res: Response) => {
 
                     // Default to "Unknown Entity"
                     let name = "Unknown Entity";
-                    let description = "You can't quite make it out.";
+                    let description = "A boring creature, lacking all creativity.";
 
                     if (isBoss && !name.startsWith("The Shadow of")) {
                         name = `The Shadow of ${name}`;

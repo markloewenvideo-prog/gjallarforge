@@ -548,8 +548,9 @@ export default function App() {
     }
 
     setVictoryData(null);
-    if (nextVillainName.trim()) {
-      await api.enterShadowRealm(campaign.id, nextVillainName, nextVillainDesc);
+    if (nextVillainName.trim() && nextEnemy) {
+      // Regular renaming of the next foe
+      await api.renameEnemy(campaign.id, nextEnemy.order, nextVillainName, nextVillainDesc);
     }
   };
 
@@ -978,7 +979,6 @@ export default function App() {
                         {victoryData.killer.name}
                       </div>
                       <div className="flex flex-col items-center mt-2">
-                        <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 mb-1">Level {victoryData.killer.level}</div>
                         <div className="text-sm font-black uppercase tracking-widest text-[#8b0000]">{getLevelTitle(victoryData.killer.level)}</div>
                       </div>
                     </div>
@@ -994,7 +994,6 @@ export default function App() {
                           {victoryData.winner.name}
                         </div>
                         <div className="flex flex-col items-center mt-2">
-                          <div className="text-[9px] font-bold uppercase tracking-[0.2em] opacity-40 mb-1">Level {victoryData.winner.level}</div>
                         </div>
                       </div>
                     )}

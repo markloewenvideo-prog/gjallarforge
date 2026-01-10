@@ -310,6 +310,21 @@ export const performAction = async (req: Request, res: Response) => {
                 }
             }
 
+            if (winnerId) {
+                winnerInfo = await prisma.participant.findUnique({ where: { id: winnerId } });
+                await prisma.logEntry.create({
+                    data: {
+                        campaignId,
+                        type: 'system',
+                        content: JSON.stringify({
+                            message: `EVENT_LOOT_CLAIMED:${winnerInfo?.name || "A hero"} claims the loot!`,
+                            winnerName: winnerInfo?.name || "A hero",
+                            tier: currentEnemy.weaponDropTier
+                        })
+                    }
+                });
+            }
+
             await prisma.campaign.update({
                 where: { id: campaignId },
                 data: { currentEnemyIndex: { increment: 1 } }
