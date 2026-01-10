@@ -500,7 +500,10 @@ export default function App() {
     // The backend now determines if the next enemy is a "shadow" (boss or no weapon drop)
     // so we check the next enemy in the queue rather than relying on a static index count.
     const nextEnemy = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
-    const enteringShadow = nextEnemy && (nextEnemy.type === 'BOSS' || nextEnemy.weaponDropTier === 0);
+    const isNextShadowPhase = nextEnemy?.type === 'SHADOW' || nextEnemy?.type === 'BOSS';
+    const prevEnemy = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex - 1);
+    const wasPrevRegular = prevEnemy?.type === 'REGULAR' || !prevEnemy?.type;
+    const enteringShadow = isNextShadowPhase && wasPrevRegular;
 
     if (enteringShadow) {
       try {
@@ -877,12 +880,7 @@ export default function App() {
                   }}
                   className="w-full py-4 button-ink font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-lg"
                 >
-                  {(() => {
-                    const next = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
-                    const isShadow = next?.name.includes("Shadow") || next?.name.startsWith("The Shadow of");
-                    const prevWasShadow = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex - 1)?.name.includes("Shadow");
-                    return (isShadow && !prevWasShadow) ? "Enter The Shadow Realm" : "Onward";
-                  })()}
+                  "Onward"
                 </button>
               </>
             )}
@@ -985,14 +983,12 @@ export default function App() {
                     className="w-full py-5 button-ink text-lg font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
                   >
                     {(() => {
-                      const config = JSON.parse(campaign.config);
-                      const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
-                      const threshold = totalWeeks - 1;
-                      const nextOrder = campaign.currentEnemyIndex; // campaign index is already incremented in handleAction
-                      const prevOrder = nextOrder - 1;
+                      const next = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
+                      const isNextShadowPhase = next?.type === 'SHADOW' || next?.type === 'BOSS';
+                      const prev = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex - 1);
+                      const wasPrevRegular = prev?.type === 'REGULAR' || !prev?.type;
 
-                      const enteringShadow = nextOrder >= threshold && prevOrder < threshold;
-                      return enteringShadow ? "Enter The Shadow Realm" : "Onward";
+                      return (isNextShadowPhase && wasPrevRegular) ? "Enter The Shadow Realm" : "Onward";
                     })()}
                   </button>
                   <div className="mt-4 text-[9px] font-bold uppercase tracking-widest opacity-30 italic">
