@@ -1,5 +1,5 @@
-import { WEAPONS, getWeapon } from './server/src/constants';
+import { WEAPONS, getWeapon, FLAVOR_TEXT } from './server/src/constants';
 
 // Re-export for frontend use
-export { WEAPONS, getWeapon };
+export { WEAPONS, getWeapon, FLAVOR_TEXT };
 export type { Weapon, WeaponTier } from './types';

@@ -60,3 +60,28 @@ export const calculateWeaponTierForCycle = (currentCycle: number): number => {
     // Round to nearest integer, minimum at 0, no upper cap
     return Math.max(0, Math.round(normalValue));
 };
+
+export const FLAVOR_TEXT = {
+    crit: "A DEVASTATING BLOW! THE EARTH SHAKES!",
+    fumble: [
+        "Your footing slips!",
+        "A weak, glancing blow.",
+        "The enemy easily parries.",
+        "Your weapon feels heavy..."
+    ],
+    success: [
+        "A solid strike!",
+        "The enemy reels from the impact!",
+        "Blood is drawn!",
+        "Your training pays off.",
+        "A thunderous collision!",
+        "Strike true, warrior!"
+    ],
+    failure: [
+        "Your attack bounces off armor.",
+        "You swing wide!",
+        "The enemy dodges effortlessly.",
+        "A miss...",
+        "Focus! You must strike harder."
+    ]
+};

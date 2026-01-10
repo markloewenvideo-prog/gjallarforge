@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api, socket } from './services/api';
 import { AppState, LogEntry, WeaponTier } from './types';
-import { WEAPONS, getWeapon } from './constants';
+import { WEAPONS, getWeapon, FLAVOR_TEXT } from './constants';
 
 const LEVEL_TITLES = [
   "Initiate", "Sweat Apprentice", "Iron Enthusiast", "Certified Lifter", "Muscle Adept",
