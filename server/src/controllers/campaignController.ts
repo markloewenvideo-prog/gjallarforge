@@ -735,10 +735,6 @@ export const renameEnemy = async (req: Request, res: Response) => {
             }
         });
 
-        if (updatedCampaign) {
-            io.to(id).emit('gamestate_update', updatedCampaign);
-        }
-
         res.json(updated);
     } catch (error) {
         console.error('Rename enemy error:', error);
