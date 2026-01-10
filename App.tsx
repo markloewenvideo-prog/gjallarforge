@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { api, socket } from './services/api';
 import { AppState, LogEntry, WeaponTier } from './types';
-import { WEAPONS, FLAVOR_TEXT } from './constants';
+import { WEAPONS, getWeapon } from './constants';
 
 const LEVEL_TITLES = [
   "Initiate", "Sweat Apprentice", "Iron Enthusiast", "Certified Lifter", "Muscle Adept",
@@ -104,7 +103,7 @@ const EnemyDisplay: React.FC<{ enemy: any }> = ({ enemy }) => {
 
         <div className="flex justify-between items-center border-t border-[#5c5346]/20 pt-4 text-[10px] font-bold uppercase tracking-widest">
           <span className="opacity-40">Victory Bounty:</span>
-          <span>Tier {enemy.weaponDropTier} – {WEAPONS[enemy.weaponDropTier as WeaponTier]?.name}</span>
+          <span>Tier {enemy.weaponDropTier} – {getWeapon(enemy.weaponDropTier).name}</span>
         </div>
       </div>
     </div>
@@ -959,10 +958,10 @@ export default function App() {
                     <div className="text-center mb-4 relative">
                       <div className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-2">Bequeathed Armament</div>
                       <div className="text-xl font-black uppercase tracking-tight py-2 px-4 border-2 border-[#5c5346]/20 inline-block bg-white/40">
-                        {WEAPONS[victoryData.weaponTier as WeaponTier]?.name || "Rusty Dagger"}
+                        {getWeapon(victoryData.weaponTier).name}
                       </div>
                       <div className="mt-2 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-[0.2em] opacity-50">
-                        <span className="pencil-font text-xs tracking-tighter">Strike Bonus: {WEAPONS[victoryData.weaponTier as WeaponTier]?.dice}</span>
+                        <span className="pencil-font text-xs tracking-tighter">Strike Bonus: +{getWeapon(victoryData.weaponTier).bonus}</span>
                         <span>•</span>
                         <span>Forge Rank {victoryData.weaponTier}</span>
                       </div>
@@ -1326,7 +1325,7 @@ export default function App() {
                   // Milestone: LOOT_CLAIMED
                   if (log.type === 'system' && content.message?.includes('EVENT_LOOT_CLAIMED')) {
                     const winner = content.winnerName;
-                    const weaponName = WEAPONS[content.tier as WeaponTier]?.name || "a bounty";
+                    const weaponName = getWeapon(content.tier).name;
                     return (
                       <div key={log.id} className="py-4 px-6 border-2 border-double border-[#3a352f]/30 mx-8 my-4 text-center bg-white/40 shadow-sm">
                         <div className="text-[8px] font-bold uppercase tracking-[0.3em] opacity-40 mb-1">Spoils of War</div>
@@ -1478,7 +1477,7 @@ export default function App() {
                 </div>
                 <div className="text-center">
                   <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-1">Foes Vanquished</div>
-                  <div className="text-2xl font-bold opacity-60">{campaign.currentEnemyIndex}</div>
+                  <div className="text-2xl font-bold opacity-60">{vanquishedCount} / {totalOriginalEnemies}</div>
                 </div>
                 <div className="text-center">
                   <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-1">
@@ -1559,7 +1558,7 @@ export default function App() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[...(participants || [])].sort((a, b) => a.id.localeCompare(b.id)).map((p: any) => {
-                const weapon = WEAPONS[p.weaponTier as WeaponTier] || WEAPONS[0];
+                const weapon = getWeapon(p.weaponTier);
                 return (
                   <div key={p.id} className="rpg-card p-6 shadow-sm relative group">
                     <button
@@ -1602,7 +1601,7 @@ export default function App() {
                       <div className="text-[9px] font-bold uppercase opacity-40 tracking-widest mb-1 flex items-center gap-2">
                         <span>⚔️</span> Armament
                       </div>
-                      <div className="text-xs font-bold">{weapon.name} <span className="opacity-40 font-normal">({weapon.dice} bonus)</span></div>
+                      <div className="text-xs font-bold">{weapon.name} <span className="opacity-40 font-normal">(+{weapon.bonus} bonus)</span></div>
                     </div>
 
                     <div>

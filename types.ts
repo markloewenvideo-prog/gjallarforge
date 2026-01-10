@@ -1,12 +1,12 @@
 
-export type WeaponTier = 0 | 1 | 2 | 3 | 4 | 5 | 10;
+
+
+export type WeaponTier = number;
 
 export interface Weapon {
   tier: WeaponTier;
   name: string;
-  dice: string; // e.g., "1d4"
-  numDice: number;
-  sides: number;
+  bonus: number;
 }
 
 export interface Participant {

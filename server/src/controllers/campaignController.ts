@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db';
-import { MONSTER_TIERS } from '../data/enemies';
-import { ENEMY_SPELLS } from '../data/content';
 import { calculateAvgWeaponDamage, getWeaponDropTier } from '../constants';
 import { getIO } from '../socket';
 import bcrypt from 'bcryptjs';
@@ -91,57 +89,34 @@ export const createCampaign = async (req: Request, res: Response) => {
         const generatedMonsterData = [];
         for (let i = 0; i < totalEnemies; i++) {
             const isFinalBoss = i === totalEnemies - 1;
-            let pool;
-            if (isFinalBoss) {
-                pool = MONSTER_TIERS.BOSS;
-            } else if (i < totalEnemies / 3) {
-                pool = MONSTER_TIERS.WEAK;
-            } else if (i < (2 * totalEnemies) / 3) {
-                pool = MONSTER_TIERS.MEDIUM;
-            } else {
-                pool = MONSTER_TIERS.HARD;
-            }
 
-            const subPool = Math.random() > 0.5 ? pool.funny : pool.regular;
-            const monster = subPool[Math.floor(Math.random() * subPool.length)];
-            let resultMonster = { ...monster };
+            // Default to "Unknown Entity" unless custom name provided
+            let monsterName = "Unknown Entity";
+            let monsterDescription = "You can't quite make it out.";
 
             // Apply custom naming for week 0 if it was the first monster (now index 0)
             if (i === 0 && initialEnemy?.name) {
-                resultMonster.name = initialEnemy.name;
-                resultMonster.description = initialEnemy.description || resultMonster.description;
+                monsterName = initialEnemy.name;
+                monsterDescription = initialEnemy.description || monsterDescription;
             }
 
             // Prefix final boss name unless already shadow-themed
-            if (isFinalBoss && !resultMonster.name.startsWith("The Shadow of")) {
-                resultMonster.name = `The Shadow of ${resultMonster.name}`;
+            if (isFinalBoss && !monsterName.startsWith("The Shadow of")) {
+                monsterName = `The Shadow of ${monsterName}`;
             }
 
             const hp = enemyHPs[i];
             const monsterLevel = isFinalBoss ? W + 1 : Math.min(W, Math.floor(i / (numNormalEnemies / W)) + 1);
 
-            let dropTier = 0;
-            // Progressive loot tiers based on HP thresholds
-            if (hp < 15) dropTier = 1;
-            else if (hp < 40) dropTier = 2;
-            else if (hp < 80) dropTier = 3;
-            else if (hp < 130) dropTier = 4;
-            else if (hp < 200) dropTier = 5;
-            else dropTier = 10;
-
-            const isCustom = i === 0 && !!initialEnemy?.name;
-            const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
-            const description = (isCustom || isFinalBoss) ? resultMonster.description : (resultMonster.description + ` Beware its ${spell}!`);
-
             generatedMonsterData.push({
-                name: resultMonster.name,
-                description,
+                name: monsterName,
+                description: monsterDescription,
                 hp: hp,
                 maxHp: hp,
                 ac: 10,
                 level: monsterLevel,
                 type: isFinalBoss ? 'BOSS' : 'REGULAR',
-                weaponDropTier: isFinalBoss ? Math.max(dropTier, 5) : dropTier, // Bosses drop good stuff
+                weaponDropTier: 0, // Calculated at defeat based on current cycle
                 order: isFinalBoss ? 500 : i,
                 isDead: false
             });
@@ -249,7 +224,61 @@ export const getCampaign = async (req: Request, res: Response) => {
             return;
         }
 
-        res.json(campaign);
+        // Calculate weapon tier for current enemy if not yet set (skip Shadow Monsters)
+        const currentEnemy = campaign.enemies.find(e => !e.isDead && e.order >= (campaign.currentEnemyIndex || 0));
+        if (currentEnemy && currentEnemy.weaponDropTier === 0 && currentEnemy.type !== 'SHADOW') {
+            const currentCycle = campaign.currentWeek || 1;
+            const { calculateWeaponTierForCycle } = await import('../constants');
+            const calculatedTier = calculateWeaponTierForCycle(currentCycle);
+
+            await prisma.enemy.update({
+                where: { id: currentEnemy.id },
+                data: { weaponDropTier: calculatedTier }
+            });
+
+            // Log rare loot detection if weapon is 2+ tiers above cycle
+            if (calculatedTier >= currentCycle + 2) {
+                const { getWeapon } = await import('../constants');
+                // Calculate probability using cumulative normal distribution
+                const erf = (x: number): number => {
+                    const sign = x >= 0 ? 1 : -1;
+                    x = Math.abs(x);
+                    const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+                    const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+                    const t = 1.0 / (1.0 + p * x);
+                    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+                    return sign * y;
+                };
+
+                const z = (calculatedTier - 0.5 - currentCycle) / 1.5;
+                const probability = 0.5 * (1 - erf(z / Math.sqrt(2)));
+                const percentChance = (probability * 100).toFixed(2);
+
+                await prisma.logEntry.create({
+                    data: {
+                        campaignId: id,
+                        type: 'system',
+                        content: JSON.stringify({
+                            message: `RARE_LOOT_DETECTED: ${getWeapon(calculatedTier).name} (Tier ${calculatedTier}) - ${percentChance}% chance!`
+                        })
+                    }
+                });
+            }
+
+            // Refresh campaign data to include the updated weapon tier
+            const updatedCampaign = await prisma.campaign.findUnique({
+                where: { id },
+                include: {
+                    participants: { orderBy: { id: 'asc' } },
+                    enemies: { orderBy: { order: 'asc' } },
+                    logs: { orderBy: { timestamp: 'desc' }, take: 50 }
+                }
+            });
+
+            res.json(updatedCampaign);
+        } else {
+            res.json(campaign);
+        }
     } catch (error) {
         console.error('Get campaign error:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -908,21 +937,18 @@ export const ascendCampaign = async (req: Request, res: Response) => {
             const isBoss = i === totalNewEnemies - 1;
             const hp = isBoss ? Math.max(bossHP, 120) : Math.ceil(a * Math.pow(b, i) + offset);
 
-            const pool = isBoss ? MONSTER_TIERS.BOSS : (i < totalNewEnemies / 2 ? MONSTER_TIERS.MEDIUM : MONSTER_TIERS.HARD);
-            const subPool = Math.random() > 0.5 ? pool.funny : pool.regular;
-            const monster = subPool[Math.floor(Math.random() * subPool.length)];
+            // Default to "Unknown Entity"
+            let name = "Unknown Entity";
+            let description = "You can't quite make it out.";
 
-            let name = monster.name;
             if (isBoss && !name.startsWith("The Shadow of")) {
                 name = `The Shadow of ${name}`;
             }
 
-            const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
-
             newEnemies.push({
                 campaignId: id,
                 name,
-                description: monster.description + (isBoss ? "" : ` Beware its ${spell}!`),
+                description,
                 hp: hp,
                 maxHp: hp,
                 ac: 10 + Math.floor(avgLevel / 8),
@@ -1064,21 +1090,18 @@ export const optInToEndless = async (req: Request, res: Response) => {
                     const isBoss = i === totalNewEnemies - 1;
                     const hp = isBoss ? Math.max(bossHP, 120) : Math.ceil(a * Math.pow(b, i) + offset);
 
-                    const pool = isBoss ? MONSTER_TIERS.BOSS : (i < totalNewEnemies / 2 ? MONSTER_TIERS.MEDIUM : MONSTER_TIERS.HARD);
-                    const subPool = Math.random() > 0.5 ? pool.funny : pool.regular;
-                    const monster = subPool[Math.floor(Math.random() * subPool.length)];
+                    // Default to "Unknown Entity"
+                    let name = "Unknown Entity";
+                    let description = "You can't quite make it out.";
 
-                    let name = monster.name;
                     if (isBoss && !name.startsWith("The Shadow of")) {
                         name = `The Shadow of ${name}`;
                     }
 
-                    const spell = ENEMY_SPELLS[Math.floor(Math.random() * ENEMY_SPELLS.length)];
-
                     newEnemies.push({
                         campaignId: id,
                         name,
-                        description: monster.description + (isBoss ? "" : ` Beware its ${spell}!`),
+                        description,
                         hp: hp,
                         maxHp: hp,
                         ac: 10 + Math.floor(avgLevel / 8),

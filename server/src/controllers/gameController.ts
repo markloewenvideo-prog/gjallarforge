@@ -1,7 +1,22 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db';
 import { getIO } from '../socket';
-import { WEAPONS } from '../constants';
+import { WEAPONS, getWeapon, calculateWeaponTierForCycle } from '../constants';
+
+// Error function approximation for normal distribution calculations
+function erf(x: number): number {
+    const sign = x >= 0 ? 1 : -1;
+    x = Math.abs(x);
+    const a1 = 0.254829592;
+    const a2 = -0.284496736;
+    const a3 = 1.421413741;
+    const a4 = -1.453152027;
+    const a5 = 1.061405429;
+    const p = 0.3275911;
+    const t = 1.0 / (1.0 + p * x);
+    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+    return sign * y;
+}
 
 // Combat helper logic moved into performAction for more granular log data
 
@@ -70,9 +85,9 @@ export const performAction = async (req: Request, res: Response) => {
             modificationReason = "curse";
         }
 
-        // 2. Weapon Modifier
-        const weapon = WEAPONS[participant.weaponTier as keyof typeof WEAPONS] || WEAPONS[0];
-        const weaponBonus = parseInt(weapon.dice.replace('+', '')) || 0;
+        // 2. Weapon Modifier  
+        const weapon = getWeapon(participant.weaponTier);
+        const weaponBonus = weapon.bonus;
 
         // 3. Strength (Level)
         const strength = participant.level;
@@ -182,13 +197,24 @@ export const performAction = async (req: Request, res: Response) => {
 
                 winnerId = winner?.id || participant.id;
 
-                // Update winner's weapon armament (Only if not a Shadow Monster)
-                const isShadowMonster = currentEnemy.weaponDropTier === 0;
-                if (!isShadowMonster && winner && currentEnemy.weaponDropTier > winner.weaponTier) {
-                    await prisma.participant.update({
-                        where: { id: winnerId },
-                        data: { weaponTier: currentEnemy.weaponDropTier }
+                // Update winner's weapon armament (cycle-based tier with normal distribution)
+                if (winner) {
+                    // Calculate weapon tier using normal distribution centered on current cycle
+                    const campaignData = await prisma.campaign.findUnique({
+                        where: { id: campaignId },
+                        select: { currentWeek: true }
                     });
+                    const currentCycle = campaignData?.currentWeek || 1;
+
+                    const calculatedTier = calculateWeaponTierForCycle(currentCycle);
+
+                    // Only upgrade if the calculated tier is better
+                    if (calculatedTier > winner.weaponTier) {
+                        await prisma.participant.update({
+                            where: { id: winnerId },
+                            data: { weaponTier: calculatedTier }
+                        });
+                    }
                 }
             }
 
@@ -205,6 +231,40 @@ export const performAction = async (req: Request, res: Response) => {
             const nextEnemy = await prisma.enemy.findFirst({
                 where: { campaignId, order: currentEnemy.order + 1 }
             });
+
+            // Calculate weapon tier for the next enemy based on current cycle (skip Shadow Monsters)
+            if (nextEnemy && nextEnemy.weaponDropTier === 0 && nextEnemy.type !== 'SHADOW') {
+                const updatedCampaign = await prisma.campaign.findUnique({
+                    where: { id: campaignId },
+                    select: { currentWeek: true }
+                });
+                const currentCycle = updatedCampaign?.currentWeek || 1;
+                const calculatedTier = calculateWeaponTierForCycle(currentCycle);
+
+                await prisma.enemy.update({
+                    where: { id: nextEnemy.id },
+                    data: { weaponDropTier: calculatedTier }
+                });
+
+                // Log rare loot detection if weapon is 2+ tiers above cycle
+                if (calculatedTier >= currentCycle + 2) {
+                    // Calculate probability using cumulative normal distribution
+                    // P(X >= calculatedTier) where X ~ Normal(currentCycle, 1.5²)
+                    const z = (calculatedTier - 0.5 - currentCycle) / 1.5; // Continuity correction
+                    const probability = 0.5 * (1 - erf(z / Math.sqrt(2))); // Upper tail probability
+                    const percentChance = (probability * 100).toFixed(2);
+
+                    await prisma.logEntry.create({
+                        data: {
+                            campaignId,
+                            type: 'system',
+                            content: JSON.stringify({
+                                message: `RARE_LOOT_DETECTED: ${getWeapon(calculatedTier).name} (Tier ${calculatedTier}) - ${percentChance}% chance!`
+                            })
+                        }
+                    });
+                }
+            }
 
             const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
 
