@@ -988,7 +988,7 @@ export default function App() {
                           </div>
                           <div className="space-y-1">
                             <label className="text-[9px] font-bold uppercase opacity-30 ml-2">
-                              {isBossRitual ? "The Boss's Identity (Name)" : "The Shadow's Identity (Name)"}
+                              {isBossRitual ? "The Boss's Identity (Name)" : "The Foe's Identity (Name)"}
                             </label>
                             <input
                               className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-lg outline-none focus:border-[#3a352f]/40 transition-all text-center"
@@ -999,7 +999,7 @@ export default function App() {
                           </div>
                           <div className="space-y-1">
                             <label className="text-[9px] font-bold uppercase opacity-30 ml-2">
-                              {isBossRitual ? "The Boss's Legend (Flavor)" : "The Shadow's Legend (Flavor)"}
+                              {isBossRitual ? "The Boss's Legend (Flavor)" : "The Foe's Legend (Flavor)"}
                             </label>
                             <textarea
                               className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-sm outline-none focus:border-[#3a352f]/40 transition-all min-h-[80px] text-center"
@@ -1029,7 +1029,12 @@ export default function App() {
                     })()}
                   </button>
                   <div className="mt-4 text-[9px] font-bold uppercase tracking-widest opacity-30 italic">
-                    The fellowship grows stronger. {campaign.currentEnemyIndex < campaign.enemies.length ? "The next shadow awaits." : "The realm is safe... for now."}
+                    {(() => {
+                      const next = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex);
+                      const isNextShadowPhase = next?.type === 'SHADOW' || next?.type === 'BOSS' || !next;
+                      if (campaign.currentEnemyIndex >= (campaign.enemies || []).length) return "The realm is safe... for now.";
+                      return `The fellowship grows stronger. The next ${isNextShadowPhase ? "shadow" : "foe"} awaits.`;
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1188,12 +1193,15 @@ export default function App() {
                                   disabled={isSubmitting}
                                   className="py-2 px-6 bg-[#3a352f] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-[#8b0000] transition-colors shadow-sm disabled:opacity-50"
                                 >
-                                  {isSubmitting ? "Opting In..." : "Opt In to Endless"}
+                                  {isSubmitting ? "Opting In..." : "Toil Endlessly"}
                                 </button>
                               ) : (
-                                <div className="text-[10px] font-bold uppercase opacity-30 tracking-widest italic">
-                                  Contemplating the Gloom...
-                                </div>
+                                <button
+                                  disabled
+                                  className="py-2 px-6 bg-[#3a352f]/30 text-white/50 text-[10px] font-bold uppercase tracking-widest cursor-not-allowed"
+                                >
+                                  Toil Endlessly
+                                </button>
                               )}
                             </div>
                           </div>
@@ -1231,55 +1239,57 @@ export default function App() {
               )}
             </section>
 
-            <section className="max-w-2xl mx-auto mb-12">
-              <div className="text-center italic opacity-40 text-[10px] uppercase tracking-[0.2em] mb-4">All enemies are vulnerable to sweat. So get moving!</div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                {[...(participants || [])].sort((a, b) => a.id.localeCompare(b.id)).map((p: any) => {
-                  return (
-                    <div key={p.id} className="flex flex-col items-center relative group">
-                      <div className="absolute -top-2 -right-2 flex flex-col items-end gap-1 z-10 pointer-events-none">
-                        {p.isBlessed && (
-                          <div className="bg-gradient-to-br from-yellow-400 to-blue-500 text-white text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 shadow-md ring-2 ring-blue-300 animate-pulse">
-                            Blessed
-                          </div>
-                        )}
-                        {p.isInspired && !p.isBlessed && (
-                          <div className="bg-yellow-400 text-[#3a352f] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 shadow-md ring-2 ring-yellow-200 animate-pulse">
-                            Inspired
-                          </div>
-                        )}
-                        {p.isCursed && !p.isBlessed && (
-                          <div className="bg-[#1a1a1a] text-[#8b0000] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 shadow-md ring-2 ring-[#8b0000]/40 animate-pulse">
-                            Cursed
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => handleAction('attack', p.id)}
-                        disabled={!!activeRoll || (currentEnemy?.isDead)}
-                        className="strike-button w-full max-w-[140px] transition-all duration-300 hover:-translate-y-1 group"
-                      >
-                        <div className="text-[10px] font-bold opacity-40 mb-1">{p.name}</div>
-                        <div className="text-xl font-black uppercase tracking-widest mb-2 transition-colors duration-300 group-hover:text-[#8b0000]">Strike</div>
-                        <div className="flex justify-center gap-2 mb-1">
-                          {Array.from({ length: config.workoutsPerWeek }).map((_, i) => {
-                            const isFilled = i < p.workoutsThisWeek;
-                            return (
-                              <div
-                                key={i}
-                                className={`w-2.5 h-2.5 rounded-full border transition-all duration-700 
-                                ${isFilled ? (p.isInspired ? 'bg-yellow-400 border-yellow-200 shadow-[0_0_8px_rgba(250,204,21,0.6)]' : 'bg-[#3a352f] border-[#3a352f]') :
-                                    (p.isInspired ? 'bg-yellow-400/5 border-yellow-400/20' : 'bg-transparent border-[#3a352f]/40')}`}
-                              />
-                            );
-                          })}
+            {!campaign.isCompleted && (
+              <section className="max-w-2xl mx-auto mb-12">
+                <div className="text-center italic opacity-40 text-[10px] uppercase tracking-[0.2em] mb-4">All enemies are vulnerable to sweat. So get moving!</div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                  {[...(participants || [])].sort((a, b) => a.id.localeCompare(b.id)).map((p: any) => {
+                    return (
+                      <div key={p.id} className="flex flex-col items-center relative group">
+                        <div className="absolute -top-2 -right-2 flex flex-col items-end gap-1 z-10 pointer-events-none">
+                          {p.isBlessed && (
+                            <div className="bg-gradient-to-br from-yellow-400 to-blue-500 text-white text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 shadow-md ring-2 ring-blue-300 animate-pulse">
+                              Blessed
+                            </div>
+                          )}
+                          {p.isInspired && !p.isBlessed && (
+                            <div className="bg-yellow-400 text-[#3a352f] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 shadow-md ring-2 ring-yellow-200 animate-pulse">
+                              Inspired
+                            </div>
+                          )}
+                          {p.isCursed && !p.isBlessed && (
+                            <div className="bg-[#1a1a1a] text-[#8b0000] text-[8px] font-black px-2 py-0.5 uppercase tracking-widest rotate-12 shadow-md ring-2 ring-[#8b0000]/40 animate-pulse">
+                              Cursed
+                            </div>
+                          )}
                         </div>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+                        <button
+                          onClick={() => handleAction('attack', p.id)}
+                          disabled={!!activeRoll || (currentEnemy?.isDead)}
+                          className="strike-button w-full max-w-[140px] transition-all duration-300 hover:-translate-y-1 group"
+                        >
+                          <div className="text-[10px] font-bold opacity-40 mb-1">{p.name}</div>
+                          <div className="text-xl font-black uppercase tracking-widest mb-2 transition-colors duration-300 group-hover:text-[#8b0000]">Strike</div>
+                          <div className="flex justify-center gap-2 mb-1">
+                            {Array.from({ length: config.workoutsPerWeek }).map((_, i) => {
+                              const isFilled = i < p.workoutsThisWeek;
+                              return (
+                                <div
+                                  key={i}
+                                  className={`w-2.5 h-2.5 rounded-full border transition-all duration-700 
+                                  ${isFilled ? (p.isInspired ? 'bg-yellow-400 border-yellow-200 shadow-[0_0_8px_rgba(250,204,21,0.6)]' : 'bg-[#3a352f] border-[#3a352f]') :
+                                      (p.isInspired ? 'bg-yellow-400/5 border-yellow-400/20' : 'bg-transparent border-[#3a352f]/40')}`}
+                                />
+                              );
+                            })}
+                          </div>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             <section className="max-w-4xl mx-auto">
               <div className="flex items-center justify-between mb-2">
