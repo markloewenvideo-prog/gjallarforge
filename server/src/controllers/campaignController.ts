@@ -800,9 +800,16 @@ export const enterShadowRealm = async (req: Request, res: Response) => {
             });
         }
 
-        // Update current enemy index to start the gauntlet if it's not already there
-        // (Usually it will be at 'startOrder' after the last regular is defeated)
-        // No explicit update needed if UI/handleForgeOnwards handles the increment.
+
+        // CRITICAL: Update currentEnemyIndex to point to the first Shadow Monster
+        // After sequencing, shadows start at 'startOrder' and boss is at the end
+        // We need to set the index to the first shadow, or to the boss if no shadows exist
+        const firstEnemyOrder = shadowMonsters.length > 0 ? startOrder : (boss ? startOrder + shadowMonsters.length : campaign.currentEnemyIndex);
+
+        await prisma.campaign.update({
+            where: { id },
+            data: { currentEnemyIndex: firstEnemyOrder }
+        });
 
         const updatedCampaign = await prisma.campaign.findUnique({
             where: { id },
