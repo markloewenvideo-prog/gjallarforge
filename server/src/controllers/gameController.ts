@@ -48,8 +48,22 @@ export const performAction = async (req: Request, res: Response) => {
             .sort((a: any, b: any) => a.order - b.order)[0];
 
         if (!currentEnemy) {
-            res.status(400).json({ error: 'No active enemy' });
+            res.status(404).json({ error: 'No enemy found' });
             return;
+        }
+
+        // Calculate weapon tier for current enemy if not yet set (skip Shadow Monsters)
+        if (currentEnemy.weaponDropTier === 0 && currentEnemy.type !== 'SHADOW') {
+            const currentCycle = campaign.currentWeek || 1;
+            const calculatedTier = calculateWeaponTierForCycle(currentCycle);
+
+            await prisma.enemy.update({
+                where: { id: currentEnemy.id },
+                data: { weaponDropTier: calculatedTier }
+            });
+
+            // Update the currentEnemy object with the new tier
+            currentEnemy.weaponDropTier = calculatedTier;
         }
 
         // Ensure currentEnemyIndex is synced to this enemy's order if it was a gap
