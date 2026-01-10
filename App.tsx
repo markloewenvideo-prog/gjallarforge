@@ -25,7 +25,7 @@ const getLevelTitle = (level: number) => {
 
 const KragCommandments: React.FC<{ onClose?: () => void; noMargin?: boolean }> = ({ onClose, noMargin }) => {
   return (
-    <div className={`rpg-card p-6 md:p-8 ${noMargin ? '' : 'mt-12'} border-double border-4 border-[#5c5346] max-w-3xl mx-auto overflow-hidden shadow-2xl relative`}>
+    <div className={`rpg-card p-6 md:p-8 ${noMargin ? '' : 'mt-12'} border-double border-4 border-[var(--pencil-color)] max-w-3xl mx-auto overflow-hidden shadow-2xl relative`}>
       {onClose && (
         <button
           onClick={onClose}
@@ -35,7 +35,7 @@ const KragCommandments: React.FC<{ onClose?: () => void; noMargin?: boolean }> =
           ×
         </button>
       )}
-      <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest mb-8 border-b-2 border-[#5c5346] pb-2 text-center">Krag’s Commandments</h2>
+      <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest mb-8 border-b-2 border-[var(--pencil-color)] pb-2 text-center">Krag’s Commandments</h2>
       <ul className="space-y-4 text-sm md:text-base italic font-medium leading-relaxed opacity-90 max-w-xl mx-auto">
         <li className="flex gap-4"><span>📜</span> "The Forge only responds to physical sweat. Every real-world workout always strikes the foe, unless the fates (d20) fumble."</li>
         <li className="flex gap-4"><span>📜</span> "Damage is a simple sum of your effort: Roll d20 + Your Strength (Level) + Weapon Modifier."</li>
@@ -48,7 +48,7 @@ const KragCommandments: React.FC<{ onClose?: () => void; noMargin?: boolean }> =
         <li className="flex gap-4"><span>📜</span> "When a foe falls, the one with the highest total D20 rolls (The Fair Sweat Rule) claims the loot. The quality of the loot reflects the foe's vitality (HP)."</li>
         <li className="flex gap-4 opacity-70"><span>📜</span> "A Hero may only carry one armament of a kind. If the swiftest hunter already bears a superior blade, the spoils flow to the next in merit."</li>
         <li className="flex gap-4 text-[#8b0000]"><span>📜</span> "Shadow Growth & Recede: Missed Oaths manifest shadow monsters, while extra effort (The Shadow Recedes) banishes these horrors and grants divine Inspiration."</li>
-        <li className="flex gap-4 font-black uppercase tracking-tighter not-italic mt-6 text-[#3a352f] justify-center text-lg md:text-xl border-t border-[#5c5346]/10 pt-4 text-center">"Now back to work."</li>
+        <li className="flex gap-4 font-black uppercase tracking-tighter not-italic mt-6 text-[var(--ink-color)] justify-center text-lg md:text-xl border-t border-[var(--pencil-color)]/10 pt-4 text-center">"Now back to work."</li>
       </ul>
     </div>
   );
@@ -62,7 +62,7 @@ const EnemyDisplay: React.FC<{ enemy: any }> = ({ enemy }) => {
     <div className="text-center mb-6">
       <div className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-2">Active Bounty</div>
       <div className="h-px bg-[#5c5346]/20 w-16 mx-auto mb-6" />
-      <div className="rpg-card dashed-card p-6 md:p-8 text-left bg-[#fdf6e3]/50 relative overflow-hidden">
+      <div className="rpg-card dashed-card p-6 md:p-8 text-left bg-[var(--parchment-bg)]/50 relative overflow-hidden">
         {adj !== 0 && (
           <div className={`absolute top-0 right-0 py-1 px-4 text-[9px] font-black uppercase tracking-widest rotate-0 z-10 shadow-sm border-l border-b ${adj > 0 ? 'bg-[#8b0000] text-[#fdf6e3] border-[#8b0000]/20' : 'bg-green-700 text-[#fdf6e3] border-green-700/20'}`}>
             {adj > 0 ? `+${adj} Shadow Growth` : `${Math.abs(adj)} Zeal's Fracture`}
@@ -94,14 +94,14 @@ const EnemyDisplay: React.FC<{ enemy: any }> = ({ enemy }) => {
             <span className="pencil-font text-xs uppercase tracking-tighter ml-2">{Math.ceil(enemy.hp)} / {enemy.maxHp} HP</span>
           </div>
         </div>
-        <div className="h-5 bg-black/5 border border-[#5c5346]/30 mb-8 relative overflow-hidden rounded-sm">
+        <div className="h-5 bg-black/5 border border-[var(--pencil-color)]/30 mb-8 relative overflow-hidden rounded-sm">
           <div
             className="absolute top-0 left-0 h-full bg-[#8b0000] opacity-90 transition-all duration-1000 ease-out"
             style={{ width: `${hpPercent}%` }}
           />
         </div>
 
-        <div className="flex justify-between items-center border-t border-[#5c5346]/20 pt-4 text-[10px] font-bold uppercase tracking-widest">
+        <div className="flex justify-between items-center border-t border-[var(--pencil-color)]/20 pt-4 text-[10px] font-bold uppercase tracking-widest">
           <span className="opacity-40">Victory Bounty:</span>
           <span>Tier {enemy.weaponDropTier} – {getWeapon(enemy.weaponDropTier).name}</span>
         </div>
@@ -140,6 +140,7 @@ export default function App() {
   const [showAbandonModal, setShowAbandonModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resolutionData, setResolutionData] = useState<any>(null);
+  const [showShadowIntro, setShowShadowIntro] = useState(false);
   const [nextVillainName, setNextVillainName] = useState("");
   const [nextVillainDesc, setNextVillainDesc] = useState("");
 
@@ -496,36 +497,26 @@ export default function App() {
   };
 
   const handleForgeOnwards = async () => {
-    const nextEnemy = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex);
-    const prevEnemy = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex - 1);
+    if (!victoryData) return;
 
-    // Transition to Shadow Realm happens when we've defeated the last REGULAR enemy 
-    // and the next potential enemy is in the "ledger" (order 10000) or is the BOSS (order 500).
-    const wasPrevRegular = prevEnemy?.type === 'REGULAR' || !prevEnemy?.type;
-    const isNextShadowPhase = nextEnemy?.type === 'SHADOW' || nextEnemy?.type === 'BOSS' || !nextEnemy;
+    // Check if we are transitioning to Shadow Realm
+    const next = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex);
+    const isNextShadowPhase = next?.type === 'SHADOW' || next?.type === 'BOSS' || !next;
+    const prev = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex - 1);
+    const wasPrevRegular = prev?.type === 'REGULAR' || !prev?.type;
 
-    if (wasPrevRegular && isNextShadowPhase) {
-      try {
-        const { campaign: updated, success } = await api.enterShadowRealm(campaign.id, nextVillainName.trim(), nextVillainDesc.trim());
-        if (success) {
-          setCampaign(updated);
-        }
-      } catch (e) {
-        console.error("Enter Shadow Realm failed", e);
-      }
-    } else if (nextVillainName.trim()) {
-      try {
-        const updated = await api.renameEnemy(campaign.id, campaign.currentEnemyIndex, nextVillainName.trim(), nextVillainDesc.trim());
-        if (updated) setCampaign(updated);
-      } catch (e) {
-        console.error("Rename failed", e);
-      }
+    if (isNextShadowPhase && wasPrevRegular) {
+      setVictoryData(null);
+      setShowShadowIntro(true);
+      return;
     }
 
     setVictoryData(null);
-    setNextVillainName("");
-    setNextVillainDesc("");
+    if (nextVillainName.trim()) {
+      await api.enterShadowRealm(campaign.id, nextVillainName, nextVillainDesc);
+    }
   };
+
 
   // Back navigation
   const goBack = () => {
@@ -555,7 +546,7 @@ export default function App() {
 
           <div className="grid gap-4 max-h-[40vh] overflow-y-auto mb-8 pr-2 relative min-h-[100px]">
             {loading && (
-              <div className="absolute inset-0 bg-[#fdf6e3]/60 backdrop-blur-[1px] z-50 flex items-center justify-center animate-in fade-in duration-300">
+              <div className="absolute inset-0 bg-[var(--parchment-bg)]/60 backdrop-blur-[1px] z-50 flex items-center justify-center animate-in fade-in duration-300">
                 <div className="text-[10px] font-black uppercase tracking-[0.5em] opacity-60 animate-pulse">Scouting the realm...</div>
               </div>
             )}
@@ -623,7 +614,7 @@ export default function App() {
                   required
                   min={1}
                   max={52}
-                  className="w-full text-2xl py-2 border-b-2 border-[#5c5346]/20 bg-transparent focus:border-[#3a352f] transition-colors pencil-font outline-none"
+                  className="w-full text-2xl py-2 border-b-2 border-[var(--pencil-color)]/20 bg-transparent focus:border-[#3a352f] transition-colors pencil-font outline-none"
                   value={createForm.weeks}
                   onChange={e => setCreateForm({ ...createForm, weeks: parseInt(e.target.value) })}
                 />
@@ -635,7 +626,7 @@ export default function App() {
                   required
                   min={1}
                   max={7}
-                  className="w-full text-2xl py-2 border-b-2 border-[#5c5346]/20 bg-transparent focus:border-[#3a352f] transition-colors pencil-font outline-none"
+                  className="w-full text-2xl py-2 border-b-2 border-[var(--pencil-color)]/20 bg-transparent focus:border-[#3a352f] transition-colors pencil-font outline-none"
                   value={createForm.workoutsPerWeek}
                   onChange={e => setCreateForm({ ...createForm, workoutsPerWeek: parseInt(e.target.value) })}
                 />
@@ -646,7 +637,7 @@ export default function App() {
               <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Summon Heroes (Comma Separated)</label>
               <textarea
                 required
-                className="w-full p-4 border-2 border-[#5c5346]/10 bg-black/5 h-32 pencil-font text-xl outline-none focus:border-[#3a352f]/30 transition-colors"
+                className="w-full p-4 border-2 border-[var(--pencil-color)]/10 bg-black/5 h-32 pencil-font text-xl outline-none focus:border-[#3a352f]/30 transition-colors"
                 value={createForm.participantsText}
                 onChange={e => setCreateForm({ ...createForm, participantsText: e.target.value })}
                 placeholder="Krag, DM, Velkyn..."
@@ -654,7 +645,7 @@ export default function App() {
               <p className="text-[9px] opacity-40 uppercase tracking-widest mt-2">The fellowship will be bound to this quest immediately. Each "Strike" represents a real-world workout.</p>
             </div>
 
-            <div className="space-y-6 pt-6 border-t border-[#5c5346]/10">
+            <div className="space-y-6 pt-6 border-t border-[var(--pencil-color)]/10">
               <div className="text-center">
                 <div className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-1">{createForm.weeks === 1 ? 'Ritual of the Final Shadow' : 'Ritual of the First Shadow'}</div>
                 <h4 className="text-xl font-black uppercase tracking-tight">{createForm.weeks === 1 ? 'The Final Shadow' : 'The Primordial Foe'}</h4>
@@ -670,7 +661,7 @@ export default function App() {
                   <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">The Shadow's Identity (Name)</label>
                   <input
                     type="text"
-                    className="w-full text-xl py-2 border-b-2 border-[#5c5346]/20 bg-transparent focus:border-[#3a352f] transition-colors pencil-font outline-none"
+                    className="w-full text-xl py-2 border-b-2 border-[var(--pencil-color)]/20 bg-transparent focus:border-[#3a352f] transition-colors pencil-font outline-none"
                     placeholder="e.g. Malakor the Grim"
                     value={createForm.initialEnemyName}
                     onChange={e => setCreateForm({ ...createForm, initialEnemyName: e.target.value })}
@@ -679,7 +670,7 @@ export default function App() {
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">The Shadow's Legend (Flavor)</label>
                   <textarea
-                    className="w-full p-4 border-2 border-[#5c5346]/10 bg-black/5 h-24 pencil-font text-sm outline-none focus:border-[#3a352f]/30 transition-colors"
+                    className="w-full p-4 border-2 border-[var(--pencil-color)]/10 bg-black/5 h-24 pencil-font text-sm outline-none focus:border-[#3a352f]/30 transition-colors"
                     placeholder="What terror greets the fellowship?"
                     value={createForm.initialEnemyDesc}
                     onChange={e => setCreateForm({ ...createForm, initialEnemyDesc: e.target.value })}
@@ -706,9 +697,34 @@ export default function App() {
   // GAME
   if (!campaign) return null; // Safety guard during transitions
 
-  const currentEnemy = (campaign.enemies || []).find((e: any) => !e.isDead && e.order >= (campaign.currentEnemyIndex || 0));
-  const participants = campaign.participants;
   const config = JSON.parse(campaign.config);
+  const participants = campaign.participants;
+
+  // Shadow Mode Logic: Active when fighting Shadow/Boss and campaign is not over
+  const currentEnemy = (campaign.enemies || []).find((e: any) => !e.isDead && e.order >= (campaign.currentEnemyIndex || 0));
+  const isShadowMode = React.useMemo(() => {
+    if (campaign.isCompleted) return false; // Revert for Hall of Victory? Or keep it? "Until Hall of Heroes" implies revert.
+    if (!currentEnemy) return false;
+    return currentEnemy.type === 'SHADOW' || currentEnemy.type === 'BOSS';
+  }, [campaign.isCompleted, currentEnemy]);
+
+  // Dark Mode Theme Toggle
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isShadowMode) {
+      root.style.setProperty('--parchment-bg', '#1a1714'); // Dark Charcoal
+      root.style.setProperty('--table-bg', '#0f0e0c');    // Pitch Black
+      root.style.setProperty('--ink-color', '#fdf6e3');   // Light Beige Text
+      root.style.setProperty('--card-bg', '#2b2620');     // Dark Brown Card
+      root.style.setProperty('--pencil-color', '#a8a29e'); // Stone Gray for borders
+    } else {
+      root.style.setProperty('--parchment-bg', '#fdf6e3'); // Original App Light Beige
+      root.style.setProperty('--table-bg', '#d9c5a3');
+      root.style.setProperty('--ink-color', '#3a352f');
+      root.style.setProperty('--card-bg', '#fdf6e3');      // Match parchment for cards in light mode
+      root.style.setProperty('--pencil-color', '#5c5346');
+    }
+  }, [isShadowMode]);
 
   // HP-Based Progress Calculation (Excluding Shadows)
   const regularEnemies = (campaign.enemies || []).filter((e: any) => e.type !== 'SHADOW');
@@ -754,7 +770,7 @@ export default function App() {
             style={{ width: `${progressPercentage}%` }}
           />
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <span className="text-[8px] font-black uppercase tracking-widest text-[#3a352f] bg-[#fdf6e3]/80 px-2 rounded">
+            <span className="text-[8px] font-black uppercase tracking-widest text-[var(--ink-color)] bg-[var(--parchment-bg)]/80 px-2 rounded">
               Quest Progress: {progressPercentage}%
             </span>
           </div>
@@ -763,7 +779,7 @@ export default function App() {
 
       <div className="w-full h-1 bg-[#3a352f] mb-8"></div>
 
-      <nav className="flex mb-12 gap-1 bg-[#5c5346]/5 p-0 border border-[#5c5346]/10">
+      <nav className="flex mb-12 gap-1 bg-[#5c5346]/5 p-0 border border-[var(--pencil-color)]/10">
         <button
           onClick={() => setActiveTab('battle')}
           className={`flex-1 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'battle' ? 'bg-[#3a352f] text-[#fdf6e3]' : 'opacity-40 hover:opacity-100'}`}
@@ -863,7 +879,7 @@ export default function App() {
                       {activeRoll.isCrit ? "INSTANT KILL!" : activeRoll.isMiss ? "TOTAL MISS" : "Total Strike"}
                     </div>
 
-                    <div className={`text-7xl font-black pencil-font ${activeRoll.isCrit ? 'text-[#8b0000] scale-110 drop-shadow-xl' : activeRoll.isMiss ? 'text-gray-400 line-through' : 'text-[#3a352f]'}`}>
+                    <div className={`text-7xl font-black pencil-font ${activeRoll.isCrit ? 'text-[#8b0000] scale-110 drop-shadow-xl' : activeRoll.isMiss ? 'text-gray-400 line-through' : 'text-[var(--ink-color)]'}`}>
                       {activeRoll.isCrit ? "MAX" : activeRoll.damage} <span className="text-xl uppercase tracking-tighter opacity-30">DMG</span>
                     </div>
                     {activeRoll.isCrit && (
@@ -880,8 +896,8 @@ export default function App() {
                     const isEnteringShadow = isShadow && !prevWasShadow && activeRoll.killed;
 
                     return (
-                      <div className="pt-8 border-t-2 border-[#5c5346]/10 relative">
-                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#fdf6e3] px-3 text-[8px] font-bold uppercase tracking-widest opacity-40">
+                      <div className="pt-8 border-t-2 border-[var(--pencil-color)]/10 relative">
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[var(--parchment-bg)] px-3 text-[8px] font-bold uppercase tracking-widest opacity-40">
                           {isEnteringShadow ? "A Warning" : "Krag’s Counsel"}
                         </div>
                         <div className={`italic text-lg opacity-90 px-2 leading-tight py-2 ${isEnteringShadow ? "text-[#8b0000] font-black not-italic" : ""}`}>
@@ -917,7 +933,7 @@ export default function App() {
       {
         victoryData && (
           <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl animate-in zoom-in-95 duration-700 overflow-y-auto">
-            <div className="rpg-card max-w-sm w-full p-0 shadow-[0_0_100px_rgba(217,197,163,0.1)] border-4 border-[#5c5346] relative my-auto">
+            <div className="rpg-card max-w-sm w-full p-0 shadow-[0_0_100px_rgba(217,197,163,0.1)] border-4 border-[var(--pencil-color)] relative my-auto">
 
               {/* The Placard Header */}
               <div className="bg-[#5c5346] text-[#fdf6e3] py-8 text-center relative">
@@ -929,7 +945,7 @@ export default function App() {
               </div>
 
               {/* The Decree Content */}
-              <div className="p-5 md:p-6 text-center bg-[#fdf6e3] max-h-[60vh] overflow-y-auto">
+              <div className="p-5 md:p-6 text-center bg-[var(--parchment-bg)] max-h-[60vh] overflow-y-auto">
                 <div className="border-4 border-double border-[#3a352f]/40 p-6 relative">
                   {/* Corner Accents */}
                   <div className="absolute -top-3 -left-3 w-6 h-6 border-t-4 border-l-4 border-[#3a352f]/40"></div>
@@ -963,7 +979,7 @@ export default function App() {
                         <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">
                           Claimant of the Spoils
                         </div>
-                        <div className="text-2xl font-black uppercase tracking-tight text-[#3a352f]">
+                        <div className="text-2xl font-black uppercase tracking-tight text-[var(--ink-color)]">
                           {victoryData.winner.name}
                         </div>
                         <div className="flex flex-col items-center mt-2">
@@ -976,7 +992,7 @@ export default function App() {
                   {victoryData.weaponTier > 0 && (
                     <div className="text-center mb-4 relative">
                       <div className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 mb-2">Bequeathed Armament</div>
-                      <div className="text-xl font-black uppercase tracking-tight py-2 px-4 border-2 border-[#5c5346]/20 inline-block bg-white/40">
+                      <div className="text-xl font-black uppercase tracking-tight py-2 px-4 border-2 border-[var(--pencil-color)]/20 inline-block bg-white/40">
                         {getWeapon(victoryData.weaponTier).name}
                       </div>
                       <div className="mt-2 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-[0.2em] opacity-50">
@@ -997,7 +1013,7 @@ export default function App() {
                     const prev = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex - 1);
                     const wasPrevRegular = prev?.type === 'REGULAR' || !prev?.type;
 
-                    if (wasPrevRegular) {
+                    if (wasPrevRegular && !isNextShadowPhase) {
                       const isBossRitual = isNextShadowPhase;
                       return (
                         <div className="text-left space-y-4 animate-in slide-in-from-bottom-2 duration-500">
@@ -1009,7 +1025,7 @@ export default function App() {
                               {isBossRitual ? "The Boss's Identity (Name)" : "The Foe's Identity (Name)"}
                             </label>
                             <input
-                              className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-lg outline-none focus:border-[#3a352f]/40 transition-all text-center"
+                              className="w-full bg-[var(--parchment-bg)] border-2 border-[#3a352f]/10 p-3 pencil-font text-lg outline-none focus:border-[#3a352f]/40 transition-all text-center"
                               placeholder="e.g. Malakor the Grim"
                               value={nextVillainName}
                               onChange={e => setNextVillainName(e.target.value)}
@@ -1020,7 +1036,7 @@ export default function App() {
                               {isBossRitual ? "The Boss's Legend (Flavor)" : "The Foe's Legend (Flavor)"}
                             </label>
                             <textarea
-                              className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-sm outline-none focus:border-[#3a352f]/40 transition-all min-h-[80px] text-center"
+                              className="w-full bg-[var(--parchment-bg)] border-2 border-[#3a352f]/10 p-3 pencil-font text-sm outline-none focus:border-[#3a352f]/40 transition-all min-h-[80px] text-center"
                               rows={2}
                               placeholder="What terror greets the fellowship?"
                               value={nextVillainDesc}
@@ -1043,7 +1059,7 @@ export default function App() {
                       const prev = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex - 1);
                       const wasPrevRegular = prev?.type === 'REGULAR' || !prev?.type;
 
-                      return (isNextShadowPhase && wasPrevRegular) ? "Enter The Shadow Realm" : "Onward";
+                      return (isNextShadowPhase && wasPrevRegular) ? "Approach the Veil" : "Onward";
                     })()}
                   </button>
                   <div className="mt-4 text-[9px] font-bold uppercase tracking-widest opacity-30 italic">
@@ -1073,14 +1089,14 @@ export default function App() {
                 <div className="h-1 w-24 bg-[#8b0000] mx-auto mt-4"></div>
               </div>
 
-              <div className="p-8 bg-[#fdf6e3]">
+              <div className="p-8 bg-[var(--parchment-bg)]">
                 <div className="space-y-8">
                   {/* Fellowship Performance */}
                   <section>
-                    <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-4 border-b border-[#5c5346]/10 pb-2">Fellowship Status</h4>
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-4 border-b border-[var(--pencil-color)]/10 pb-2">Fellowship Status</h4>
                     <div className="space-y-4">
                       {[...(resolutionData.participants || [])].sort((a, b) => (a.id || "").localeCompare(b.id || "")).map((p: any, idx: number) => (
-                        <div key={idx} className="flex justify-between items-center bg-white/40 p-3 rounded border border-[#5c5346]/5">
+                        <div key={idx} className="flex justify-between items-center bg-white/40 p-3 rounded border border-[var(--pencil-color)]/5">
                           <div className="flex flex-col">
                             <span className="text-lg font-black uppercase tracking-tight leading-none">{p.name}</span>
                             <span className="text-[10px] font-bold opacity-40 uppercase mt-1">
@@ -1160,26 +1176,26 @@ export default function App() {
                   <div className="absolute top-0 left-0 w-full h-2 bg-yellow-600/40"></div>
                   <div className="mb-4 text-6xl">🏆</div>
                   <h2 className="text-5xl font-black uppercase tracking-tighter mb-4 text-yellow-700/80">Hall of Legends</h2>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.5em] opacity-40 mb-8 pb-4 border-b border-[#5c5346]/10">The Journey Concluded</div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.5em] opacity-40 mb-8 pb-4 border-b border-[var(--pencil-color)]/10">The Journey Concluded</div>
 
                   <p className="text-lg italic opacity-70 mb-12 max-w-lg mx-auto leading-relaxed">
                     "The Forge remembers every strike, every oath, and every drop of sweat. The Shadow has been banished, and your names are etched into the stone of GJALLAR forever."
                   </p>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12 text-center">
-                    <div className="bg-white/40 p-4 rounded-sm border border-[#5c5346]/10">
+                    <div className="bg-white/40 p-4 rounded-sm border border-[var(--pencil-color)]/10">
                       <div className="text-[10px] font-bold uppercase opacity-30 mb-1">Total Deeds</div>
                       <div className="text-2xl font-black">{participants.reduce((sum: number, p: any) => sum + p.totalWorkouts, 0)}</div>
                     </div>
-                    <div className="bg-white/40 p-4 rounded-sm border border-[#5c5346]/10">
+                    <div className="bg-white/40 p-4 rounded-sm border border-[var(--pencil-color)]/10">
                       <div className="text-[10px] font-bold uppercase opacity-30 mb-1">Foes Slayer</div>
                       <div className="text-2xl font-black">{campaign.enemies.length}</div>
                     </div>
-                    <div className="bg-white/40 p-4 rounded-sm border border-[#5c5346]/10">
+                    <div className="bg-white/40 p-4 rounded-sm border border-[var(--pencil-color)]/10">
                       <div className="text-[10px] font-bold uppercase opacity-30 mb-1">Nat-20s Landed</div>
                       <div className="text-2xl font-black">{participants.reduce((sum: number, p: any) => sum + (p.nat20Count || 0), 0)}</div>
                     </div>
-                    <div className="bg-white/40 p-4 rounded-sm border border-[#5c5346]/10">
+                    <div className="bg-white/40 p-4 rounded-sm border border-[var(--pencil-color)]/10">
                       <div className="text-[10px] font-bold uppercase opacity-30 mb-1">Highest Strike</div>
                       <div className="text-2xl font-black">{Math.max(...participants.map((p: any) => p.highestSingleRoll || 0))}</div>
                     </div>
@@ -1315,7 +1331,7 @@ export default function App() {
                 <div className="text-[8px] font-bold uppercase tracking-widest opacity-20">Living Ledger • Total Records: {campaign.logs.length}</div>
               </div>
 
-              <div className="rpg-card h-[400px] overflow-y-auto p-0 space-y-0 bg-black/5 rounded-none border-x-0 border-y-2 border-[#5c5346]/20">
+              <div className="rpg-card h-[400px] overflow-y-auto p-0 space-y-0 bg-black/5 rounded-none border-x-0 border-y-2 border-[var(--pencil-color)]/20">
                 {campaign.logs.length === 0 && (
                   <div className="h-full flex items-center justify-center italic opacity-30 text-sm uppercase tracking-widest">The ink is dry. No deeds recorded yet.</div>
                 )}
@@ -1412,10 +1428,10 @@ export default function App() {
                     const description = content.description || "The shadow manifests in the forge.";
 
                     return (
-                      <div key={log.id} className="py-8 px-10 border-4 border-double border-[#5c5346]/20 mx-8 my-6 bg-[#3a352f]/5 text-center relative overflow-hidden shadow-lg animate-in zoom-in-95 duration-700">
+                      <div key={log.id} className="py-8 px-10 border-4 border-double border-[var(--pencil-color)]/20 mx-8 my-6 bg-[#3a352f]/5 text-center relative overflow-hidden shadow-lg animate-in zoom-in-95 duration-700">
                         <div className="absolute top-0 left-0 w-full h-1 bg-[#8b0000]/30" />
                         <div className="text-[9px] font-black uppercase tracking-[0.5em] text-[#8b0000] mb-3">A New Threat Emerges</div>
-                        <div className="text-2xl md:text-4xl font-black uppercase tracking-tighter text-[#3a352f] mb-3 leading-none">
+                        <div className="text-2xl md:text-4xl font-black uppercase tracking-tighter text-[var(--ink-color)] mb-3 leading-none">
                           {enemyName}
                         </div>
                         <div className="h-px bg-[#5c5346]/20 w-24 mx-auto mb-4" />
@@ -1442,10 +1458,10 @@ export default function App() {
                   if (log.type === 'attack') {
                     const isCrit = content.roll === 20;
                     const isFumble = content.roll === 1;
-                    const rollColor = isCrit ? 'text-[#8b0000]' : isFumble ? 'text-gray-400 opacity-50 line-through' : 'text-[#3a352f]';
+                    const rollColor = isCrit ? 'text-[#8b0000]' : isFumble ? 'text-gray-400 opacity-50 line-through' : 'text-[var(--ink-color)]';
 
                     return (
-                      <div key={log.id} className="grid grid-cols-[60px_1fr_60px_60px] md:grid-cols-[80px_1fr_100px_100px] items-center py-3 px-2 md:px-4 border-b border-[#5c5346]/10 hover:bg-black/5 transition-colors overflow-x-hidden">
+                      <div key={log.id} className="grid grid-cols-[60px_1fr_60px_60px] md:grid-cols-[80px_1fr_100px_100px] items-center py-3 px-2 md:px-4 border-b border-[var(--pencil-color)]/10 hover:bg-black/5 transition-colors overflow-x-hidden">
                         <div className="pencil-font text-[10px] opacity-40">{timeStr}</div>
                         <div className="flex items-center gap-2">
                           <span className="font-black uppercase tracking-tight text-xs">{content.participantName}</span>
@@ -1475,7 +1491,7 @@ export default function App() {
 
                   // System / Meta entries
                   return (
-                    <div key={log.id} className="py-1.5 px-4 text-[10px] italic opacity-40 uppercase tracking-widest border-b border-[#5c5346]/5">
+                    <div key={log.id} className="py-1.5 px-4 text-[10px] italic opacity-40 uppercase tracking-widest border-b border-[var(--pencil-color)]/5">
                       {content.message || JSON.stringify(content)}
                     </div>
                   )
@@ -1483,7 +1499,7 @@ export default function App() {
               </div>
             </section>
 
-            <section className="mt-16 pt-12 border-t border-[#5c5346]/10 max-w-4xl mx-auto">
+            <section className="mt-16 pt-12 border-t border-[var(--pencil-color)]/10 max-w-4xl mx-auto">
               <div className="text-center mb-8">
                 <div className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-30 mb-1 text-center">Quest Summary</div>
               </div>
@@ -1535,7 +1551,7 @@ export default function App() {
                     <input
                       autoFocus
                       type="text"
-                      className="w-full text-2xl py-2 border-b-2 border-[#5c5346] bg-transparent text-center mb-10 pencil-font"
+                      className="w-full text-2xl py-2 border-b-2 border-[var(--pencil-color)] bg-transparent text-center mb-10 pencil-font"
                       value={enlistName}
                       onChange={e => setEnlistName(e.target.value)}
                       placeholder="Hero Name"
@@ -1556,7 +1572,7 @@ export default function App() {
                   <h3 className="text-4xl font-black uppercase tracking-tight mb-4">Forge Ahead</h3>
                   <p className="text-sm opacity-70 mb-8 italic">"Transition the fellowship into Cycle {campaign.currentWeek + 1}. Oaths will be reset, and the brave will grow stronger."</p>
 
-                  <div className="grid grid-cols-2 gap-4 mb-10 text-left border-y border-[#5c5346]/10 py-6">
+                  <div className="grid grid-cols-2 gap-4 mb-10 text-left border-y border-[var(--pencil-color)]/10 py-6">
                     <div>
                       <div className="text-[9px] font-bold uppercase opacity-40 tracking-widest mb-1">Gjallar Oaths</div>
                       <div className="text-xs">Met goals become +1 Strength.</div>
@@ -1610,7 +1626,7 @@ export default function App() {
                         <div className="text-[10px] font-bold uppercase text-[#8b0000] tracking-widest mt-0.5">{getLevelTitle(p.level)}</div>
                         <div className="text-[9px] font-bold uppercase opacity-40 mt-1 tracking-wider">Level {p.level} • {p.totalWorkouts} Total Deeds</div>
                       </div>
-                      <div className="strength-box text-center bg-white/30 border border-[#5c5346]/10">
+                      <div className="strength-box text-center bg-white/30 border border-[var(--pencil-color)]/10">
                         <div className="text-[8px] font-bold uppercase tracking-widest opacity-60">Strength</div>
                         <div className="text-xl font-bold">+{p.level}</div>
                       </div>
@@ -1642,7 +1658,7 @@ export default function App() {
               })}
             </div>
 
-            <div className="mt-12 rpg-card dashed-card p-8 bg-transparent shadow-none border-[#5c5346]/10 text-center">
+            <div className="mt-12 rpg-card dashed-card p-8 bg-transparent shadow-none border-[var(--pencil-color)]/10 text-center">
               <div className="text-[10px] font-bold uppercase opacity-40 tracking-[0.4em] mb-4">Quest Summary</div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
@@ -1670,6 +1686,71 @@ export default function App() {
           </div>
         )
       }
-    </div >
+      {
+        showShadowIntro && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-in zoom-in-95 duration-1000 overflow-y-auto">
+            <div className="rpg-card max-w-lg w-full p-0 shadow-[0_0_150px_rgba(139,0,0,0.2)] border-4 border-[#3a352f] relative my-auto">
+              {/* Header */}
+              <div className="bg-[#1a1714] text-[#8b0000] py-10 text-center relative border-b-4 border-[#3a352f]">
+                <div className="text-6xl mb-4 animate-pulse">🌑</div>
+                <h3 className="text-4xl font-black uppercase tracking-[0.2em] leading-none mb-2 drop-shadow-[0_0_10px_rgba(139,0,0,0.5)]">
+                  The Veil Thins
+                </h3>
+                <div className="text-[10px] font-bold uppercase tracking-[0.5em] opacity-60 text-[#fdf6e3]">The Final Gauntlet Awaits</div>
+              </div>
+
+              {/* Content */}
+              <div className="p-8 text-center bg-[#2b2620] text-[#fdf6e3] relative">
+                <p className="text-lg italic mb-8 opacity-80 leading-relaxed font-serif">
+                  "The world grows dim. The Forge has tested your mettle, but now the Shadows of your past failures rise to meet you. Beyond this veil lies the final test—a gauntlet of your own making. Only by conquering your demons can you face the Ultimate Evil."
+                </p>
+
+                <div className="space-y-6 mb-8 text-left">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase opacity-40 ml-1">Name the Final Shadow</label>
+                    <input
+                      className="w-full bg-[#1a1714] border-2 border-[#3a352f] p-4 pencil-font text-xl text-[#fdf6e3] outline-none focus:border-[#8b0000] transition-all text-center placeholder:opacity-20"
+                      placeholder="e.g. The Void Incarnate"
+                      value={nextVillainName}
+                      onChange={e => setNextVillainName(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase opacity-40 ml-1">Describe the Horror</label>
+                    <textarea
+                      className="w-full bg-[#1a1714] border-2 border-[#3a352f] p-4 pencil-font text-sm text-[#fdf6e3] outline-none focus:border-[#8b0000] transition-all min-h-[100px] text-center placeholder:opacity-20"
+                      rows={3}
+                      placeholder="What darkness lies at the end of all things?"
+                      value={nextVillainDesc}
+                      onChange={e => setNextVillainDesc(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={async () => {
+                    if (!nextVillainName.trim()) return;
+                    try {
+                      const { campaign: updated, success } = await api.enterShadowRealm(campaign.id, nextVillainName.trim(), nextVillainDesc.trim());
+                      if (success) {
+                        setCampaign(updated);
+                        setShowShadowIntro(false);
+                      }
+                    } catch (e) {
+                      console.error(e);
+                    }
+                  }}
+                  disabled={!nextVillainName.trim()}
+                  className="w-full py-5 bg-[#8b0000] text-[#fdf6e3] text-xl font-black uppercase tracking-[0.4em] hover:bg-[#a00000] active:scale-95 transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Enter the Shadow Realm
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </div>
   );
 }
