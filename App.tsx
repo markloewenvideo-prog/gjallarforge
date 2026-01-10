@@ -497,21 +497,22 @@ export default function App() {
   };
 
   const handleForgeOnwards = async () => {
-    // The backend now determines if the next enemy is a "shadow" (boss or no weapon drop)
-    // so we check the next enemy in the queue rather than relying on a static index count.
-    const nextEnemy = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
-    const isNextShadowPhase = nextEnemy?.type === 'SHADOW' || nextEnemy?.type === 'BOSS';
-    const prevEnemy = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex - 1);
-    const wasPrevRegular = prevEnemy?.type === 'REGULAR' || !prevEnemy?.type;
-    const enteringShadow = isNextShadowPhase && wasPrevRegular;
+    const nextEnemy = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex);
+    const prevEnemy = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex - 1);
 
-    if (enteringShadow) {
+    // Transition to Shadow Realm happens when we've defeated the last REGULAR enemy 
+    // and the next potential enemy is in the "ledger" (order 10000) or is the BOSS (order 500).
+    const wasPrevRegular = prevEnemy?.type === 'REGULAR' || !prevEnemy?.type;
+    const isNextShadowPhase = nextEnemy?.type === 'SHADOW' || nextEnemy?.type === 'BOSS' || !nextEnemy;
+
+    if (wasPrevRegular && isNextShadowPhase) {
       try {
-        const { campaign: updated, summary } = await api.forgeAhead(campaign.id);
-        setCampaign(updated);
-        setResolutionData(summary);
+        const { campaign: updated, success } = await api.enterShadowRealm(campaign.id, nextVillainName.trim(), nextVillainDesc.trim());
+        if (success) {
+          setCampaign(updated);
+        }
       } catch (e) {
-        console.error("Forge Ahead failed", e);
+        console.error("Enter Shadow Realm failed", e);
       }
     } else if (nextVillainName.trim()) {
       try {
@@ -521,6 +522,7 @@ export default function App() {
         console.error("Rename failed", e);
       }
     }
+
     setVictoryData(null);
     setNextVillainName("");
     setNextVillainDesc("");
@@ -971,41 +973,49 @@ export default function App() {
                 <div className="mt-8 space-y-6">
                   <div className="h-px bg-[#3a352f]/10 w-full mb-6" />
 
-                  {campaign.currentEnemyIndex < campaign.enemies.length && (
-                    <div className="text-left space-y-4 animate-in slide-in-from-bottom-2 duration-500">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 text-center mb-4">Ritual of Succession</div>
+                  {(() => {
+                    const next = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex);
+                    const isNextShadowPhase = next?.type === 'SHADOW' || next?.type === 'BOSS' || !next;
+                    const prev = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex - 1);
+                    const wasPrevRegular = prev?.type === 'REGULAR' || !prev?.type;
 
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold uppercase opacity-30 ml-2">The Shadow's Identity (Name)</label>
-                        <input
-                          className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-lg outline-none focus:border-[#3a352f]/40 transition-all text-center"
-                          placeholder="e.g. Malakor the Grim"
-                          value={nextVillainName}
-                          onChange={e => setNextVillainName(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold uppercase opacity-30 ml-2">The Shadow's Legend (Flavor)</label>
-                        <textarea
-                          className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-sm outline-none focus:border-[#3a352f]/40 transition-all min-h-[80px] text-center"
-                          rows={2}
-                          placeholder="What terror greets the fellowship?"
-                          value={nextVillainDesc}
-                          onChange={e => setNextVillainDesc(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  )}
+                    if (wasPrevRegular && isNextShadowPhase) {
+                      return (
+                        <div className="text-left space-y-4 animate-in slide-in-from-bottom-2 duration-500">
+                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 text-center mb-4">Name Your Final Shadow</div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold uppercase opacity-30 ml-2">The Boss's Identity (Name)</label>
+                            <input
+                              className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-lg outline-none focus:border-[#3a352f]/40 transition-all text-center"
+                              placeholder="e.g. Malakor the Grim"
+                              value={nextVillainName}
+                              onChange={e => setNextVillainName(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold uppercase opacity-30 ml-2">The Boss's Legend (Flavor)</label>
+                            <textarea
+                              className="w-full bg-[#fdf6e3] border-2 border-[#3a352f]/10 p-3 pencil-font text-sm outline-none focus:border-[#3a352f]/40 transition-all min-h-[80px] text-center"
+                              rows={2}
+                              placeholder="What terror greets the fellowship?"
+                              value={nextVillainDesc}
+                              onChange={e => setNextVillainDesc(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
 
                   <button
                     onClick={handleForgeOnwards}
                     className="w-full py-5 button-ink text-lg font-black uppercase tracking-[0.4em] hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
                   >
                     {(() => {
-                      const next = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
-                      const isNextShadowPhase = next?.type === 'SHADOW' || next?.type === 'BOSS';
-                      const prev = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex - 1);
+                      const next = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex);
+                      const isNextShadowPhase = next?.type === 'SHADOW' || next?.type === 'BOSS' || !next;
+                      const prev = (campaign.enemies || []).find((e: any) => e.order === campaign.currentEnemyIndex - 1);
                       const wasPrevRegular = prev?.type === 'REGULAR' || !prev?.type;
 
                       return (isNextShadowPhase && wasPrevRegular) ? "Enter The Shadow Realm" : "Onward";

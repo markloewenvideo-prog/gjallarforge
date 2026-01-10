@@ -176,5 +176,15 @@ export const api = {
         });
         if (!res.ok) throw await res.json();
         return res.json();
+    },
+
+    enterShadowRealm: async (campaignId: string, bossName: string, bossDescription: string) => {
+        const res = await fetch(`${API_URL}/campaigns/${campaignId}/enter-shadow-realm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bossName, bossDescription })
+        });
+        if (!res.ok) throw await res.json();
+        return res.json();
     }
 };

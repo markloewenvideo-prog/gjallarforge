@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createCampaign, getCampaign, joinCampaign, getDefaultCampaign, getAllCampaigns, deleteCampaign, enlistHero, forgeAhead, retireHero, renameEnemy, ascendCampaign, optInToEndless } from '../controllers/campaignController';
+import { createCampaign, getCampaign, joinCampaign, getDefaultCampaign, getAllCampaigns, deleteCampaign, enlistHero, forgeAhead, retireHero, renameEnemy, ascendCampaign, optInToEndless, enterShadowRealm } from '../controllers/campaignController';
 import { performAction, logWorkout, undoAction } from '../controllers/gameController';
 
 const router = Router();
@@ -14,6 +14,7 @@ router.post('/:id/forge-ahead', forgeAhead);
 router.post('/:id/ascend', ascendCampaign);
 router.post('/:id/opt-in-endless', optInToEndless);
 router.post('/:id/rename-enemy', renameEnemy);
+router.post('/:id/enter-shadow-realm', enterShadowRealm);
 router.delete('/:id/participant/:participantId', retireHero);
 router.post('/join', joinCampaign);
 router.post('/action', performAction);

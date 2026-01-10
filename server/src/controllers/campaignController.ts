@@ -142,7 +142,7 @@ export const createCampaign = async (req: Request, res: Response) => {
                 level: monsterLevel,
                 type: isFinalBoss ? 'BOSS' : 'REGULAR',
                 weaponDropTier: isFinalBoss ? Math.max(dropTier, 5) : dropTier, // Bosses drop good stuff
-                order: i,
+                order: isFinalBoss ? 500 : i,
                 isDead: false
             });
         }
@@ -512,142 +512,92 @@ export const forgeAhead = async (req: Request, res: Response) => {
             }
         });
 
-        const netMisses = summary.totalMisses - summary.totalExtras;
-        summary.netMisses = netMisses;
-
+        // 1. SHADOW LEDGER: IN (Misses)
         if (missesPerPlayer.length > 0) {
-            // THE SHADOW GROWS: Spawn monsters before the Final Boss
-            summary.shadowMonstersSpawned = summary.totalMisses;
-
-            // Find the Final Boss to determine insertion point
-            const finalBoss = await prisma.enemy.findFirst({
-                where: { campaignId: id, type: 'BOSS' }
-            });
-
-            if (finalBoss) {
-                const bossOrder = finalBoss.order;
-
-                // Shift the Boss up by the current misses to make room
-                await prisma.enemy.update({
-                    where: { id: finalBoss.id },
-                    data: { order: bossOrder + summary.totalMisses }
-                });
-
-                let spawnedCount = 0;
-                for (const miss of missesPerPlayer) {
-                    for (let i = 0; i < miss.count; i++) {
-                        await prisma.enemy.create({
-                            data: {
-                                campaignId: id,
-                                name: `Shadow of ${miss.name}'s Failure`,
-                                description: `Spawned in Cycle ${campaign.currentWeek}. Shame! Shame! Shame!`,
-                                hp: 15,
-                                maxHp: 15,
-                                ac: 10,
-                                type: "SHADOW",
-                                weaponDropTier: 0,
-                                order: bossOrder + spawnedCount, // Insert at old boss position
-                                isDead: false
-                            }
-                        });
-                        spawnedCount++;
-                    }
-                }
-
-                await prisma.logEntry.create({
-                    data: {
-                        campaignId: id,
-                        type: 'system',
-                        content: JSON.stringify({
-                            message: `A New Threat Emerges: The Shadows of Failure have manifested!`,
-                        })
-                    }
-                });
-
-                await prisma.logEntry.create({
-                    data: {
-                        campaignId: id,
-                        type: 'system',
-                        content: JSON.stringify({
-                            message: `THE_SHADOW_GROWS: The shadows deepen, their weight pressing upon the fellowship.${summary.shadowMonstersSpawned > 0 ? ` ${summary.shadowMonstersSpawned} Shadow Monsters have manifested from missed Oaths!` : ''}`
-                        })
-                    }
-                });
-            }
-        }
-        if (summary.totalExtras > 0) {
-            let numToBanish = summary.totalExtras;
-            let totalBanishedCount = 0;
-
-            // 1. Prioritize banishing player-specific "Failure" monsters
-            for (const extra of extrasPerPlayer) {
-                if (numToBanish <= 0) break;
-
-                const myMonsters = await prisma.enemy.findMany({
-                    where: {
-                        campaignId: id,
-                        isDead: false,
-                        name: `The Shadow of ${extra.name}'s Failure`
-                    },
-                    orderBy: { order: 'asc' }, // Banish their own failures first
-                    take: Math.min(extra.count, numToBanish)
-                });
-
-                if (myMonsters.length > 0) {
-                    const count = myMonsters.length;
-                    const monsterIds = myMonsters.map(m => m.id);
-                    await prisma.enemy.deleteMany({ where: { id: { in: monsterIds } } });
-                    numToBanish -= count;
-                    totalBanishedCount += count;
+            let totalNewShadows = 0;
+            for (const miss of missesPerPlayer) {
+                for (let i = 0; i < miss.count; i++) {
+                    await prisma.enemy.create({
+                        data: {
+                            campaignId: id,
+                            name: `Shadow of ${miss.name}'s Failure`,
+                            description: `Spawned in Cycle ${campaign.currentWeek}. Shame! Shame! Shame!`,
+                            hp: 15,
+                            maxHp: 15,
+                            ac: 10,
+                            type: "SHADOW",
+                            weaponDropTier: 0,
+                            order: 10000 + (Date.now() % 100000) + totalNewShadows, // Ledger order
+                            isDead: false
+                        }
+                    });
+                    totalNewShadows++;
                 }
             }
-
-            // 2. Banish earliest created shadow monsters (HP 15, Tier 0)
-            if (numToBanish > 0) {
-                const globalMonsters = await prisma.enemy.findMany({
-                    where: {
-                        campaignId: id,
-                        isDead: false,
-                        hp: 15,
-                        weaponDropTier: 0
-                    },
-                    orderBy: { order: 'asc' }, // Earliest first
-                    take: numToBanish
-                });
-
-                if (globalMonsters.length > 0) {
-                    for (const m of globalMonsters) {
-                        // Banish it
-                        await prisma.enemy.delete({ where: { id: m.id } });
-                        // And shift ALL subsequent enemies down to maintain compact order
-                        await prisma.enemy.updateMany({
-                            where: { campaignId: id, order: { gt: m.order } },
-                            data: { order: { decrement: 1 } }
-                        });
-                        totalBanishedCount++;
-                        numToBanish--;
-                    }
-                }
-            }
-
-            summary.shadowMonstersBanished = totalBanishedCount;
-
-            let recedeMessage = "";
-            if (totalBanishedCount > 0) {
-                recedeMessage = `THE_SHADOW_RECEDES: Zeal's fracture! The darkness falters before your determination. ${totalBanishedCount} manifested horrors have been banished.`;
-            } else {
-                recedeMessage = `THE_SHADOW_RECEDES: Zeal's fracture! The darkness falters before your determination.`;
-            }
+            summary.shadowMonstersSpawned = totalNewShadows;
 
             await prisma.logEntry.create({
                 data: {
                     campaignId: id,
                     type: 'system',
                     content: JSON.stringify({
-                        message: recedeMessage
+                        message: `THE_SHADOW_GROWS: The shadows deepen. ${totalNewShadows} Shadow Monsters have manifested in the background ledger!`
                     })
                 }
             });
+        }
+
+        // 2. SHADOW LEDGER: OUT (Extras / Banishment)
+        if (extrasPerPlayer.length > 0) {
+            let totalBanished = 0;
+            for (const extra of extrasPerPlayer) {
+                let toBanishCount = extra.count;
+                while (toBanishCount > 0) {
+                    // Try to banish own failure first
+                    let target = await prisma.enemy.findFirst({
+                        where: {
+                            campaignId: id,
+                            type: 'SHADOW',
+                            name: `Shadow of ${extra.name}'s Failure`,
+                            isDead: false
+                        },
+                        orderBy: { order: 'asc' }
+                    });
+
+                    // If no personal shadows, banish oldest shadow
+                    if (!target) {
+                        target = await prisma.enemy.findFirst({
+                            where: {
+                                campaignId: id,
+                                type: 'SHADOW',
+                                isDead: false
+                            },
+                            orderBy: { order: 'asc' }
+                        });
+                    }
+
+                    if (target) {
+                        await prisma.enemy.delete({ where: { id: target.id } });
+                        totalBanished++;
+                        toBanishCount--;
+                    } else {
+                        break; // Ledger empty for this player/campaign
+                    }
+                }
+            }
+
+            if (totalBanished > 0) {
+                statusLogs.push(prisma.logEntry.create({
+                    data: {
+                        campaignId: id,
+                        type: 'system',
+                        content: JSON.stringify({
+                            message: `THE_SHADOW_RECEDES: ${totalBanished} Shadow Monsters have been banished from the ledger by the fellowship's extra effort!`
+                        })
+                    }
+                }));
+            }
+            summary.shadowMonstersBanished = totalBanished;
         }
 
         // 4. Update Campaign Week
@@ -655,12 +605,6 @@ export const forgeAhead = async (req: Request, res: Response) => {
             where: { id },
             data: {
                 currentWeek: campaign.currentWeek + 1,
-                logs: {
-                    create: {
-                        type: 'system',
-                        content: JSON.stringify({ message: `Cycle ${campaign.currentWeek + 1} has begun. The Forge burns brighter.` })
-                    }
-                }
             }
         });
 
@@ -683,7 +627,7 @@ export const forgeAhead = async (req: Request, res: Response) => {
             where: { id },
             include: {
                 participants: { orderBy: { id: 'asc' } },
-                enemies: true,
+                enemies: { orderBy: { order: 'asc' } },
                 logs: { orderBy: { timestamp: 'desc' }, take: 50 }
             }
         });
@@ -762,19 +706,84 @@ export const renameEnemy = async (req: Request, res: Response) => {
             }
         });
 
-        await prisma.logEntry.create({
-            data: {
-                campaignId: id,
-                type: 'system',
-                content: JSON.stringify({
-                    message: `A New Threat Emerges: ${updated.name}`,
-                    enemyName: updated.name,
-                    description: updated.description
-                })
-            }
+        if (updatedCampaign) {
+            io.to(id).emit('gamestate_update', updatedCampaign);
+        }
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Rename enemy error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+export const enterShadowRealm = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { bossName, bossDescription } = req.body;
+
+        const campaign = await prisma.campaign.findUnique({
+            where: { id },
+            include: { enemies: { orderBy: { order: 'asc' } } }
         });
 
-        const io = getIO();
+        if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+
+        // 1. Rename the BOSS enemy
+        const boss = await prisma.enemy.findFirst({
+            where: { campaignId: id, type: 'BOSS' }
+        });
+
+        if (boss) {
+            let finalBossName = bossName || boss.name;
+            if (!finalBossName.startsWith("The Shadow of")) {
+                finalBossName = `The Shadow of ${finalBossName}`;
+            }
+
+            await prisma.enemy.update({
+                where: { id: boss.id },
+                data: {
+                    name: finalBossName,
+                    description: bossDescription || boss.description
+                }
+            });
+        }
+
+        // 2. Sequence all SHADOW enemies from the ledger
+        // Find the last REGULAR enemy's order
+        const lastRegular = await prisma.enemy.findFirst({
+            where: { campaignId: id, type: 'REGULAR' },
+            orderBy: { order: 'desc' }
+        });
+
+        const startOrder = (lastRegular?.order ?? -1) + 1;
+
+        const shadowMonsters = await prisma.enemy.findMany({
+            where: { campaignId: id, type: 'SHADOW' },
+            orderBy: { order: 'asc' }
+        });
+
+        const updates = shadowMonsters.map((m, index) => {
+            return prisma.enemy.update({
+                where: { id: m.id },
+                data: { order: startOrder + index }
+            });
+        });
+
+        // Finally, put the boss at the very end
+        if (boss) {
+            updates.push(prisma.enemy.update({
+                where: { id: boss.id },
+                data: { order: startOrder + shadowMonsters.length }
+            }));
+        }
+
+        await prisma.$transaction(updates);
+
+        // Update current enemy index to start the gauntlet if it's not already there
+        // (Usually it will be at 'startOrder' after the last regular is defeated)
+        // No explicit update needed if UI/handleForgeOnwards handles the increment.
+
         const updatedCampaign = await prisma.campaign.findUnique({
             where: { id },
             include: {
@@ -784,16 +793,28 @@ export const renameEnemy = async (req: Request, res: Response) => {
             }
         });
 
+        await prisma.logEntry.create({
+            data: {
+                campaignId: id,
+                type: 'system',
+                content: JSON.stringify({
+                    message: `EVENT_SHADOW_REALM: The fellowship enters the Shadow Realm! ${shadowMonsters.length} Shadows of Failure stand between you and the ${boss?.name || 'Final Shadow'}.`
+                })
+            }
+        });
+
+        const io = getIO();
         if (updatedCampaign) {
             io.to(id).emit('gamestate_update', updatedCampaign);
         }
 
-        res.json(updatedCampaign);
+        res.json({ success: true, campaign: updatedCampaign });
     } catch (error) {
-        console.error('Rename enemy error:', error);
+        console.error('Enter shadow realm error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
+
 
 export const ascendCampaign = async (req: Request, res: Response) => {
     try {
