@@ -516,18 +516,18 @@ export const forgeAhead = async (req: Request, res: Response) => {
         summary.netMisses = netMisses;
 
         if (missesPerPlayer.length > 0) {
-            // THE SHADOW GROWS: Spawn monsters
+            // THE SHADOW GROWS: Spawn monsters before the Final Boss
             summary.shadowMonstersSpawned = summary.totalMisses;
 
+            // Find the Final Boss to determine insertion point
             const finalBoss = await prisma.enemy.findFirst({
-                where: { campaignId: id },
-                orderBy: { order: 'desc' }
+                where: { campaignId: id, type: 'BOSS' }
             });
 
             if (finalBoss) {
                 const bossOrder = finalBoss.order;
 
-                // Shift boss order up by totalMisses
+                // Shift the Boss up by the current misses to make room
                 await prisma.enemy.update({
                     where: { id: finalBoss.id },
                     data: { order: bossOrder + summary.totalMisses }
@@ -539,13 +539,14 @@ export const forgeAhead = async (req: Request, res: Response) => {
                         await prisma.enemy.create({
                             data: {
                                 campaignId: id,
-                                name: `The Shadow of ${miss.name}'s Failure`,
-                                description: `Spawned in Cycle ${campaign.currentWeek}. Shame! Shame! Shame!`,
+                                name: `Shadow of ${miss.name}'s Failure`,
+                                description: `Spawned in Cycle ${campaign.currentWeek}.`,
                                 hp: 15,
                                 maxHp: 15,
                                 ac: 10,
+                                type: "SHADOW",
                                 weaponDropTier: 0,
-                                order: bossOrder + spawnedCount,
+                                order: bossOrder + spawnedCount, // Insert at old boss position
                                 isDead: false
                             }
                         });
@@ -568,9 +569,7 @@ export const forgeAhead = async (req: Request, res: Response) => {
                         campaignId: id,
                         type: 'system',
                         content: JSON.stringify({
-                            message: summary.shadowMonstersSpawned > 0
-                                ? `THE_SHADOW_GROWS: ${summary.shadowMonstersSpawned} Shadow Monsters have manifested from missed Oaths! They stand between you and the final shadow.`
-                                : `THE_SHADOW_GROWS: The final shadow's presence deepens, its vitality swelling by ${summary.shadowGrowthHP}.`
+                            message: `THE_SHADOW_GROWS: The shadows deepen, their weight pressing upon the fellowship.${summary.shadowMonstersSpawned > 0 ? ` ${summary.shadowMonstersSpawned} Shadow Monsters have manifested from missed Oaths!` : ''}`
                         })
                     }
                 });
@@ -603,7 +602,7 @@ export const forgeAhead = async (req: Request, res: Response) => {
                 }
             }
 
-            // 2. Banish earliest created shadow monsters (HP 10, Tier 0)
+            // 2. Banish earliest created shadow monsters (HP 15, Tier 0)
             if (numToBanish > 0) {
                 const globalMonsters = await prisma.enemy.findMany({
                     where: {
@@ -617,33 +616,27 @@ export const forgeAhead = async (req: Request, res: Response) => {
                 });
 
                 if (globalMonsters.length > 0) {
-                    const count = globalMonsters.length;
-                    const monsterIds = globalMonsters.map(m => m.id);
-                    await prisma.enemy.deleteMany({ where: { id: { in: monsterIds } } });
-                    numToBanish -= count;
-                    totalBanishedCount += count;
+                    for (const m of globalMonsters) {
+                        // Banish it
+                        await prisma.enemy.delete({ where: { id: m.id } });
+                        // And shift ALL subsequent enemies down to maintain compact order
+                        await prisma.enemy.updateMany({
+                            where: { campaignId: id, order: { gt: m.order } },
+                            data: { order: { decrement: 1 } }
+                        });
+                        totalBanishedCount++;
+                        numToBanish--;
+                    }
                 }
-            }
-
-            // Re-adjust boss order
-            const finalBoss = await prisma.enemy.findFirst({
-                where: { campaignId: id },
-                orderBy: { order: 'desc' }
-            });
-            if (finalBoss && totalBanishedCount > 0) {
-                await prisma.enemy.update({
-                    where: { id: finalBoss.id },
-                    data: { order: { decrement: totalBanishedCount } }
-                });
             }
 
             summary.shadowMonstersBanished = totalBanishedCount;
 
             let recedeMessage = "";
             if (totalBanishedCount > 0) {
-                recedeMessage = `THE_SHADOW_RECEDES: The fellowship's zeal banishes ${totalBanishedCount} horrors.`;
+                recedeMessage = `THE_SHADOW_RECEDES: Zeal's fracture! The darkness falters before your determination. ${totalBanishedCount} manifested horrors have been banished.`;
             } else {
-                recedeMessage = `THE_SHADOW_RECEDES: The darkness falters before your determination.`;
+                recedeMessage = `THE_SHADOW_RECEDES: Zeal's fracture! The darkness falters before your determination.`;
             }
 
             await prisma.logEntry.create({

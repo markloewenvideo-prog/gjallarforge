@@ -84,8 +84,7 @@ export const performAction = async (req: Request, res: Response) => {
 
         const config = JSON.parse(campaign.config);
         const isShadowMonster = currentEnemy.weaponDropTier === 0;
-        const totalEnemies = config.totalEnemies || config.totalWeeks || 4;
-        const isFinalBoss = currentEnemy.order === (totalEnemies - 1);
+        const isFinalBoss = currentEnemy.type === 'BOSS';
 
         if (rawD20 === 20 || (rawD20 >= 2 && participant.isBlessed && isShadowMonster)) {
             if (isFinalBoss) {
@@ -203,15 +202,17 @@ export const performAction = async (req: Request, res: Response) => {
                 data: { currentEnemyIndex: { increment: 1 } }
             });
 
-            const config = JSON.parse(campaign.config);
-            const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
-            const totalEnemies = config.totalEnemies || totalWeeks;
-            const threshold = totalEnemies - 1;
+            const nextEnemy = await prisma.enemy.findFirst({
+                where: { campaignId, order: currentEnemy.order + 1 }
+            });
 
-            if (currentEnemy.order < threshold && (campaign.currentEnemyIndex + 1) >= threshold) {
+            const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
+
+            if (nextEnemy && (nextEnemy.type === 'BOSS' || nextEnemy.weaponDropTier === 0)) {
                 // --- APPLY BLESSED STATUS ---
                 const participants = await prisma.participant.findMany({ where: { campaignId } });
                 const workoutsPerWeek = Number(config.workoutsPerWeek || 3);
+                // The Shadow Realm begins after (Total Weeks - 1) worth of workouts
                 const totalPossible = workoutsPerWeek * (totalWeeks - 1);
 
                 for (const p of participants) {
@@ -248,7 +249,7 @@ export const performAction = async (req: Request, res: Response) => {
             }
 
             // --- FINAL COMPLETION CHECK ---
-            if (currentEnemy.order >= totalEnemies - 1) {
+            if (isFinalBoss) {
                 await prisma.campaign.update({
                     where: { id: campaignId },
                     data: { isCompleted: true }

@@ -226,30 +226,6 @@ export default function App() {
     }
   }, [campaign?.id]);
 
-  // Shared Progress Report Detection
-  useEffect(() => {
-    if (campaign?.logs?.length > 0 && !resolutionData) {
-      const summaryLog = campaign.logs.find((l: any) =>
-        l.type === 'system' && l.content.includes('EVENT_WEEKLY_SUMMARY:')
-      );
-
-      if (summaryLog) {
-        let content;
-        try {
-          content = JSON.parse(summaryLog.content);
-        } catch (e) { return; }
-
-        const week = content.week;
-        const storageKey = `forge_seen_summary_${week}_${campaign.id}`;
-        const hasSeen = localStorage.getItem(storageKey);
-
-        if (!hasSeen) {
-          setResolutionData(content);
-          localStorage.setItem(storageKey, 'true');
-        }
-      }
-    }
-  }, [campaign?.logs, campaign?.id, resolutionData]);
 
   // --- Handlers ---
 
@@ -521,10 +497,10 @@ export default function App() {
   };
 
   const handleForgeOnwards = async () => {
-    const config = JSON.parse(campaign.config);
-    const totalWeeks = Number(config.totalWeeks || config.weeks || 4);
-    const threshold = totalWeeks - 1;
-    const enteringShadow = campaign.currentEnemyIndex >= threshold; // Index is already incremented
+    // The backend now determines if the next enemy is a "shadow" (boss or no weapon drop)
+    // so we check the next enemy in the queue rather than relying on a static index count.
+    const nextEnemy = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
+    const enteringShadow = nextEnemy && (nextEnemy.type === 'BOSS' || nextEnemy.weaponDropTier === 0);
 
     if (enteringShadow) {
       try {
@@ -730,6 +706,15 @@ export default function App() {
   const participants = campaign.participants;
   const config = JSON.parse(campaign.config);
 
+  // HP-Based Progress Calculation
+  const totalCampaignHP = (campaign.enemies || []).reduce((sum: number, e: any) => sum + e.maxHp, 0);
+  const dealtCampaignHP = (campaign.enemies || []).reduce((sum: number, e: any) => {
+    if (e.isDead) return sum + e.maxHp;
+    if (currentEnemy && e.id === currentEnemy.id) return sum + (e.maxHp - e.hp);
+    return sum;
+  }, 0);
+  const progressPercentage = totalCampaignHP > 0 ? Math.round((dealtCampaignHP / totalCampaignHP) * 100) : 0;
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 md:py-10 relative">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-4 pb-2">
@@ -864,14 +849,23 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="pt-8 border-t-2 border-[#5c5346]/10 relative">
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#fdf6e3] px-3 text-[8px] font-bold uppercase tracking-widest opacity-40">
-                      Krag’s Counsel
-                    </div>
-                    <div className="italic text-lg opacity-90 px-2 leading-tight py-2">
-                      "{activeRoll.message}"
-                    </div>
-                  </div>
+                  {(() => {
+                    const next = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex);
+                    const isShadow = next?.name.includes("Shadow") || next?.name.startsWith("The Shadow of") || next?.type === 'SHADOW' || next?.type === 'BOSS';
+                    const prevWasShadow = campaign.enemies.find((e: any) => e.order === campaign.currentEnemyIndex - 1)?.name.includes("Shadow");
+                    const isEnteringShadow = isShadow && !prevWasShadow && activeRoll.killed;
+
+                    return (
+                      <div className="pt-8 border-t-2 border-[#5c5346]/10 relative">
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#fdf6e3] px-3 text-[8px] font-bold uppercase tracking-widest opacity-40">
+                          {isEnteringShadow ? "A Warning" : "Krag’s Counsel"}
+                        </div>
+                        <div className={`italic text-lg opacity-90 px-2 leading-tight py-2 ${isEnteringShadow ? "text-[#8b0000] font-black not-italic" : ""}`}>
+                          {isEnteringShadow ? "Darkness Awaits You" : `"${activeRoll.message}"`}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <button
@@ -1445,10 +1439,10 @@ export default function App() {
                 </div>
                 <div className="text-center">
                   <div className="text-[10px] font-bold uppercase tracking-widest opacity-30 mb-1">
-                    {campaign.isEndless ? "Eternal Status" : "Completion"}
+                    {campaign.isEndless ? "Eternal Status" : "Quest Progress"}
                   </div>
                   <div className="text-2xl font-bold opacity-60">
-                    {campaign.isEndless ? "∞" : `${Math.round((campaign.currentEnemyIndex / campaign.enemies.length) * 100)}%`}
+                    {campaign.isEndless ? "∞" : `${progressPercentage}%`}
                   </div>
                 </div>
               </div>
@@ -1602,10 +1596,10 @@ export default function App() {
                 </div>
                 <div>
                   <div className="text-[10px] font-bold uppercase opacity-30 mb-1">
-                    {campaign.isEndless ? "Eternal Status" : "Completion"}
+                    {campaign.isEndless ? "Eternal Status" : "Quest Progress"}
                   </div>
                   <div className="text-2xl font-bold opacity-60">
-                    {campaign.isEndless ? "∞" : `${Math.round((campaign.currentEnemyIndex / campaign.enemies.length) * 100)}%`}
+                    {campaign.isEndless ? "∞" : `${progressPercentage}%`}
                   </div>
                 </div>
               </div>
