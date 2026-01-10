@@ -217,6 +217,18 @@ export const performAction = async (req: Request, res: Response) => {
         const isClaimedKill = claimKill.count > 0;
 
         if (isClaimedKill) {
+            // Log the kill event specifically
+            await prisma.logEntry.create({
+                data: {
+                    campaignId,
+                    type: 'system',
+                    content: JSON.stringify({
+                        message: `EVENT_DEFEAT:${participant.name} defeated ${currentEnemy.name}!`,
+                        participantName: participant.name,
+                        enemyName: currentEnemy.name
+                    })
+                }
+            });
 
             if (currentEnemy.weaponDropTier > 0) {
                 // Fetch all participants sorted by Bounty Score (The Fair Sweat Rule)
@@ -429,6 +441,8 @@ export const performAction = async (req: Request, res: Response) => {
             campaign: updatedCampaign,
             winnerName: winnerInfo?.name,
             winnerLevel: winnerInfo?.level,
+            killerName: participant.name, // Explicitly tell frontend who killed it
+            killerLevel: participant.level,
             tier: isClaimedKill ? currentEnemy.weaponDropTier : 0,
             originalRoll,
             modificationReason

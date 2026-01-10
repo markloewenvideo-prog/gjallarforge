@@ -339,8 +339,8 @@ export default function App() {
             originalRoll: res.originalRoll,
             modificationReason: res.modificationReason,
             victoryPayload: res.killed ? {
-              winner: res.winnerName || "The Fellowship",
-              winnerLevel: res.winnerLevel || 1,
+              killer: { name: res.killerName, level: res.killerLevel || 1 },
+              winner: { name: res.winnerName, level: res.winnerLevel || 1 },
               enemyName: currentEnemy?.name || "The Foe",
               weaponTier: res.tier
             } : null
@@ -941,17 +941,36 @@ export default function App() {
                     "The terror known as <span className="font-bold not-italic">{victoryData.enemyName}</span> has been struck from the living ledger forever."
                   </p>
 
-                  <div className="mb-8">
-                    <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">
-                      {victoryData.weaponTier > 0 ? "Claimant of the Spoils" : "Slayer of the Shadow"}
+                  <div className="mb-8 space-y-6">
+                    {/* The Slayer (Always Shown) */}
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">
+                        Slayer of the Shadow
+                      </div>
+                      <div className="text-3xl font-black uppercase tracking-tight text-[#8b0000]">
+                        {victoryData.killer.name}
+                      </div>
+                      <div className="flex flex-col items-center mt-2">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 mb-1">Level {victoryData.killer.level}</div>
+                        <div className="text-sm font-black uppercase tracking-widest text-[#8b0000]">{getLevelTitle(victoryData.killer.level)}</div>
+                      </div>
                     </div>
-                    <div className="text-3xl font-black uppercase tracking-tight text-[#8b0000]">
-                      {victoryData.winner}
-                    </div>
-                    <div className="flex flex-col items-center mt-2">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40 mb-1">Level {victoryData.winnerLevel}</div>
-                      <div className="text-sm font-black uppercase tracking-widest text-[#8b0000]">{getLevelTitle(victoryData.winnerLevel)}</div>
-                    </div>
+
+                    {/* The Claimant (Only if Loot Dropped AND different from Slayer) */}
+                    {victoryData.weaponTier > 0 && victoryData.winner.name && victoryData.winner.name !== victoryData.killer.name && (
+                      <div className="animate-in slide-in-from-bottom-2 duration-700 delay-300">
+                        <div className="h-px w-24 bg-[#3a352f]/20 mx-auto mb-6"></div>
+                        <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">
+                          Claimant of the Spoils
+                        </div>
+                        <div className="text-2xl font-black uppercase tracking-tight text-[#3a352f]">
+                          {victoryData.winner.name}
+                        </div>
+                        <div className="flex flex-col items-center mt-2">
+                          <div className="text-[9px] font-bold uppercase tracking-[0.2em] opacity-40 mb-1">Level {victoryData.winner.level}</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {victoryData.weaponTier > 0 && (
