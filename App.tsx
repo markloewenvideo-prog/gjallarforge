@@ -709,14 +709,19 @@ export default function App() {
   const participants = campaign.participants;
   const config = JSON.parse(campaign.config);
 
-  // HP-Based Progress Calculation
-  const totalCampaignHP = (campaign.enemies || []).reduce((sum: number, e: any) => sum + e.maxHp, 0);
-  const dealtCampaignHP = (campaign.enemies || []).reduce((sum: number, e: any) => {
+  // HP-Based Progress Calculation (Excluding Shadows)
+  const regularEnemies = (campaign.enemies || []).filter((e: any) => e.type !== 'SHADOW');
+  const totalCampaignHP = regularEnemies.reduce((sum: number, e: any) => sum + e.maxHp, 0);
+  const dealtCampaignHP = regularEnemies.reduce((sum: number, e: any) => {
     if (e.isDead) return sum + e.maxHp;
     if (currentEnemy && e.id === currentEnemy.id) return sum + (e.maxHp - e.hp);
     return sum;
   }, 0);
   const progressPercentage = totalCampaignHP > 0 ? Math.round((dealtCampaignHP / totalCampaignHP) * 100) : 0;
+
+  // Foes Vanquished Calculation (Excluding Shadows)
+  const totalOriginalEnemies = regularEnemies.length;
+  const vanquishedCount = regularEnemies.filter((e: any) => e.isDead).length;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 md:py-10 relative">
@@ -739,6 +744,21 @@ export default function App() {
           <button onClick={() => setShowAbandonModal(true)} className="px-4 py-2 button-red-hollow text-[10px]">Abandon</button>
         </div>
       </header>
+
+      {/* Campaign Progress Bar */}
+      {!campaign.isEndless && (
+        <div className="w-full h-2 bg-[#5c5346]/10 mb-8 rounded-full overflow-hidden relative group">
+          <div
+            className="h-full bg-[#8b0000] transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(139,0,0,0.4)]"
+            style={{ width: `${progressPercentage}%` }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-[8px] font-black uppercase tracking-widest text-[#3a352f] bg-[#fdf6e3]/80 px-2 rounded">
+              Quest Progress: {progressPercentage}%
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="w-full h-1 bg-[#3a352f] mb-8"></div>
 
@@ -1588,7 +1608,9 @@ export default function App() {
                 </div>
                 <div>
                   <div className="text-[10px] font-bold uppercase opacity-30 mb-1">Foes Vanquished</div>
-                  <div className="text-2xl font-bold opacity-60">{campaign.currentEnemyIndex}</div>
+                  <div className="text-2xl font-bold opacity-60">
+                    {campaign.isEndless ? vanquishedCount : `${vanquishedCount} / ${totalOriginalEnemies}`}
+                  </div>
                 </div>
                 <div>
                   <div className="text-[10px] font-bold uppercase opacity-30 mb-1">
